@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeuroSync - Emotion-Aware Intelligent System</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="multilayer-styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
@@ -42,8 +43,11 @@
                 <textarea id="emotionInput" placeholder="Type how you're feeling... Or ask me to do something! (e.g., 'I'm feeling great!' or 'Play voice note of Sarah' or 'I miss mom')" rows="4"></textarea>
                 <div class="input-actions">
                     <button id="detectButton" onclick="detectEmotion()">Detect Emotion</button>
+                    <button id="multilayerButton" onclick="toggleMultiLayerInput()" class="multilayer-btn" title="Toggle Multi-Layer Input Section">🎯 Multi-Layer Input</button>
+                    <button id="detectMultiLayerButton" onclick="detectMultiLayerEmotion()" class="multilayer-btn" style="display: none;" title="Detect Emotion from Multiple Layers">🎯 Detect Multi-Layer</button>
                     <button id="recordButton" onclick="toggleRecording()" class="record-btn">🎤 Record Voice</button>
                     <button id="ttsToggleBtn" onclick="toggleTTS()" class="tts-toggle-btn" title="Toggle Text-to-Speech">🔇 TTS Off</button>
+                    <button id="consentButton" onclick="showConsentPanel()" class="consent-btn" title="Privacy & Consent Settings">🔒 Consent</button>
                 </div>
                 <div id="recordingStatus" style="display: none; margin-top: 10px; color: #ef4444;">
                     <span id="recordingIndicator">●</span> Recording... Click again to stop
@@ -56,6 +60,94 @@
                 <div id="voiceNotesList" class="voice-notes-list"></div>
             </div>
             
+            <!-- Consent/Privacy Panel -->
+            <div id="consentPanel" class="consent-panel" style="display: none; margin-top: 20px; background: var(--surface); padding: 20px; border-radius: 10px; border: 2px solid var(--primary-color);">
+                <h3>🔒 Privacy & Consent Settings</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px;">
+                    Control what data NeuroSync can collect for emotion detection. You can enable/disable specific layers.
+                </p>
+                <div class="consent-options">
+                    <label class="consent-item">
+                        <input type="checkbox" id="consentEmotionSensing" onchange="toggleConsent('emotionSensing')">
+                        <span>Enable Emotion Sensing (Required)</span>
+                    </label>
+                    <label class="consent-item">
+                        <input type="checkbox" id="consentVisualLayer" onchange="toggleConsent('visualLayer')">
+                        <span>Visual Layer (Facial Expression Detection)</span>
+                    </label>
+                    <label class="consent-item">
+                        <input type="checkbox" id="consentAudioLayer" onchange="toggleConsent('audioLayer')">
+                        <span>Audio Layer (Voice Analysis)</span>
+                    </label>
+                    <label class="consent-item">
+                        <input type="checkbox" id="consentBiometricLayer" onchange="toggleConsent('biometricLayer')">
+                        <span>Biometric Layer (Heart Rate, GSR, Temperature)</span>
+                    </label>
+                    <label class="consent-item">
+                        <input type="checkbox" id="consentDataStorage" onchange="toggleConsent('dataStorage')">
+                        <span>Data Storage (Save emotion history)</span>
+                    </label>
+                </div>
+                <button onclick="document.getElementById('consentPanel').style.display='none'" class="close-btn" style="margin-top: 15px;">Close</button>
+            </div>
+
+            <!-- Multi-Layer Input Section -->
+            <div id="multilayerInputSection" class="multilayer-input-section" style="display: none; margin-top: 20px; background: var(--surface); padding: 20px; border-radius: 10px;">
+                <h3>🎯 Multi-Layer Emotion Detection</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px;">
+                    Provide additional data from different layers for more accurate emotion detection.
+                </p>
+                
+                <!-- Biometric Inputs -->
+                <div class="multilayer-group">
+                    <h4>💓 Biometric Data (Optional)</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Heart Rate (BPM)</label>
+                            <input type="number" id="biometricHeartRate" placeholder="e.g., 72" min="40" max="200" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">GSR (μS)</label>
+                            <input type="number" id="biometricGSR" placeholder="e.g., 3.5" min="0" max="20" step="0.1" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Temperature (°F)</label>
+                            <input type="number" id="biometricTemperature" placeholder="e.g., 98.6" min="90" max="105" step="0.1" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contextual Inputs -->
+                <div class="multilayer-group" style="margin-top: 20px;">
+                    <h4>📱 Contextual Data (Optional)</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px;">
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Activity Type</label>
+                            <select id="activityType" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                                <option value="">None</option>
+                                <option value="work">Work</option>
+                                <option value="exercise">Exercise</option>
+                                <option value="rest">Rest</option>
+                                <option value="social">Social</option>
+                                <option value="entertainment">Entertainment</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Activity Intensity (0-1)</label>
+                            <input type="number" id="activityIntensity" placeholder="e.g., 0.5" min="0" max="1" step="0.1" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Task Intensity (0-1)</label>
+                            <input type="number" id="taskIntensity" placeholder="e.g., 0.7" min="0" max="1" step="0.1" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.9rem; color: var(--text-secondary);">Task Complexity (0-1)</label>
+                            <input type="number" id="taskComplexity" placeholder="e.g., 0.6" min="0" max="1" step="0.1" style="padding: 8px; width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="voice-cloning-section" style="margin-top: 20px; background: var(--surface); padding: 20px; border-radius: 10px;">
                 <h3>🎭 Voice Cloning</h3>
                 <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 15px;">
@@ -71,6 +163,9 @@
             </div>
 
             <div class="results-section">
+                <!-- Multi-Layer Result Container -->
+                <div id="multilayerResultContainer" class="multilayer-result-container" style="display: none;"></div>
+
                 <div id="emotionResult" class="result-card" style="display: none;">
                     <h3>Detected Emotion</h3>
                     <div class="emotion-display">
@@ -104,6 +199,15 @@
     <script src="app.js?v=2.0"></script>
     <script src="facial-detection.js?v=1.0"></script>
     <script src="voice-cloning.js?v=1.0"></script>
+    <script src="multilayer-emotion.js?v=1.0"></script>
+    <script>
+        // Initialize multi-layer emotion detection on page load
+        window.addEventListener('load', function() {
+            if (window.initMultiLayerEmotion) {
+                initMultiLayerEmotion();
+            }
+        });
+    </script>
 </body>
 </html>
 

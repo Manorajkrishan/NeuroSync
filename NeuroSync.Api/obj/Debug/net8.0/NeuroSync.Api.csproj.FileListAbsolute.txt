@@ -75,3 +75,5 @@ E:\human ai\NeuroSync.Api\obj\Debug\net8.0\NeuroSync.Api.pdb
 E:\human ai\NeuroSync.Api\obj\Debug\net8.0\NeuroSync.Api.genruntimeconfig.cache
 E:\human ai\NeuroSync.Api\obj\Debug\net8.0\ref\NeuroSync.Api.dll
 E:\human ai\NeuroSync.Api\obj\Debug\net8.0\NeuroSync.Api.sourcelink.json
+E:\human ai\NeuroSync.Api\bin\Debug\net8.0\VoiceClones\default\537a14ce-c10e-479a-abea-34d0eafbfaaa.json
+E:\human ai\NeuroSync.Api\bin\Debug\net8.0\VoiceClones\user_1768100382140_984ikt7de\c1ed36c1-dfa4-4d6d-a185-d7eaaca19710.json

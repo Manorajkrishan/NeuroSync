@@ -172,6 +172,27 @@ builder.Services.AddHostedService<AutoRetrainingService>(sp =>
     return new AutoRetrainingService(logger, sp, environment, dataCollector);
 });
 
+// Add Multi-Layer Emotion Fusion Service
+builder.Services.AddSingleton<MultiLayerEmotionFusionService>();
+
+// Add Advanced Audio Analysis Service
+builder.Services.AddSingleton<AdvancedAudioAnalysisService>();
+
+// Add Biometric Integration Service
+builder.Services.AddSingleton<BiometricIntegrationService>();
+
+// Add Contextual Awareness Service
+builder.Services.AddSingleton<ContextualAwarenessService>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ContextualAwarenessService>>();
+    var conversationMemory = sp.GetService<ConversationMemory>();
+    var userProfileService = sp.GetService<UserProfileService>();
+    return new ContextualAwarenessService(logger, conversationMemory, userProfileService);
+});
+
+// Add Ethical AI Framework Service
+builder.Services.AddSingleton<EthicalAIFrameworkService>();
+
 // Add Decision Engine
 builder.Services.AddScoped<DecisionEngine>(sp =>
 {
@@ -181,6 +202,16 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var conversationMemory = sp.GetService<ConversationMemory>();
     var emotionalIntelligence = sp.GetService<EmotionalIntelligence>();
     return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence);
+});
+
+// Add Advanced Action Orchestrator
+builder.Services.AddScoped<AdvancedActionOrchestrator>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<AdvancedActionOrchestrator>>();
+    var realIoTController = sp.GetService<RealIoTController>();
+    var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
+    var decisionEngine = sp.GetRequiredService<DecisionEngine>();
+    return new AdvancedActionOrchestrator(logger, realIoTController, iotSimulator, decisionEngine);
 });
 
 var app = builder.Build();

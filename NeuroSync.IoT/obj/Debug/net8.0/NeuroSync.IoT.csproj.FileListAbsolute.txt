@@ -1,0 +1,16 @@
+E:\human ai\NeuroSync.IoT\bin\Debug\net8.0\NeuroSync.IoT.deps.json
+E:\human ai\NeuroSync.IoT\bin\Debug\net8.0\NeuroSync.IoT.dll
+E:\human ai\NeuroSync.IoT\bin\Debug\net8.0\NeuroSync.IoT.pdb
+E:\human ai\NeuroSync.IoT\bin\Debug\net8.0\NeuroSync.Core.dll
+E:\human ai\NeuroSync.IoT\bin\Debug\net8.0\NeuroSync.Core.pdb
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.csproj.AssemblyReference.cache
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.GeneratedMSBuildEditorConfig.editorconfig
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.AssemblyInfoInputs.cache
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.AssemblyInfo.cs
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.csproj.CoreCompileInputs.cache
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSyn.6D105279.Up2Date
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.dll
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\refint\NeuroSync.IoT.dll
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.pdb
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\ref\NeuroSync.IoT.dll
+E:\human ai\NeuroSync.IoT\obj\Debug\net8.0\NeuroSync.IoT.sourcelink.json

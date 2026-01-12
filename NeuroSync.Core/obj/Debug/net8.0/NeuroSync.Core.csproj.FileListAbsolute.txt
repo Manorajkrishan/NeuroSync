@@ -1,0 +1,13 @@
+E:\human ai\NeuroSync.Core\bin\Debug\net8.0\NeuroSync.Core.deps.json
+E:\human ai\NeuroSync.Core\bin\Debug\net8.0\NeuroSync.Core.dll
+E:\human ai\NeuroSync.Core\bin\Debug\net8.0\NeuroSync.Core.pdb
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.csproj.AssemblyReference.cache
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.GeneratedMSBuildEditorConfig.editorconfig
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.AssemblyInfoInputs.cache
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.AssemblyInfo.cs
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.csproj.CoreCompileInputs.cache
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.dll
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\refint\NeuroSync.Core.dll
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.pdb
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\ref\NeuroSync.Core.dll
+E:\human ai\NeuroSync.Core\obj\Debug\net8.0\NeuroSync.Core.sourcelink.json

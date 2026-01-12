@@ -1,0 +1,16 @@
+E:\human ai\NeuroSync.ML\bin\Debug\net8.0\NeuroSync.ML.deps.json
+E:\human ai\NeuroSync.ML\bin\Debug\net8.0\NeuroSync.ML.dll
+E:\human ai\NeuroSync.ML\bin\Debug\net8.0\NeuroSync.ML.pdb
+E:\human ai\NeuroSync.ML\bin\Debug\net8.0\NeuroSync.Core.dll
+E:\human ai\NeuroSync.ML\bin\Debug\net8.0\NeuroSync.Core.pdb
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.csproj.AssemblyReference.cache
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.GeneratedMSBuildEditorConfig.editorconfig
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.AssemblyInfoInputs.cache
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.AssemblyInfo.cs
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.csproj.CoreCompileInputs.cache
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSyn.A1630FCE.Up2Date
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.dll
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\refint\NeuroSync.ML.dll
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.pdb
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\ref\NeuroSync.ML.dll
+E:\human ai\NeuroSync.ML\obj\Debug\net8.0\NeuroSync.ML.sourcelink.json

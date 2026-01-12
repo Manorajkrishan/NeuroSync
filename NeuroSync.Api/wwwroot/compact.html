@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroSync - Your AI Friend</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="compact-ui.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="compact-container">
+        <!-- Compact Header -->
+        <div class="compact-header">
+            <h1>🧠 NeuroSync</h1>
+            <div class="avatar-container">
+                <div id="mainAvatar" class="avatar-display neutral" title="Your AI Friend"></div>
+                <span id="statusIndicator" class="status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444;"></span>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chatMessages" class="chat-messages">
+            <!-- Messages will be added here dynamically -->
+            <div class="chat-message ai-message">
+                <div class="message-avatar">👶</div>
+                <div class="message-bubble">
+                    <div>Hi! I'm your new friend. What's your name?</div>
+                    <div class="message-time">Just now</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="compact-input-area">
+            <!-- Collapsible Sections -->
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapsible('quickActions')">
+                    <span>⚙️ Quick Actions</span>
+                    <span id="quickActionsArrow">▼</span>
+                </div>
+                <div id="quickActions" class="collapsible-content">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 0;">
+                        <button class="compact-btn" onclick="toggleRecording()" title="Record Voice">🎤</button>
+                        <button id="ttsToggleBtn" class="compact-btn" onclick="toggleTTS()" title="Text-to-Speech">🔇</button>
+                        <button class="compact-btn" onclick="toggleCollapsible('voiceNotes')" title="Voice Notes">🎵</button>
+                        <button class="compact-btn" onclick="toggleCollapsible('voiceCloning')" title="Voice Cloning">🎭</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Notes (Collapsible) -->
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapsible('voiceNotes')">
+                    <span>🎤 Voice Notes</span>
+                    <span id="voiceNotesArrow">▶</span>
+                </div>
+                <div id="voiceNotes" class="collapsible-content">
+                    <div id="voiceNotesList" style="padding: 10px 0; max-height: 200px; overflow-y: auto;"></div>
+                </div>
+            </div>
+
+            <!-- Voice Cloning (Collapsible) -->
+            <div class="collapsible-section">
+                <div class="collapsible-header" onclick="toggleCollapsible('voiceCloning')">
+                    <span>🎭 Voice Cloning</span>
+                    <span id="voiceCloningArrow">▶</span>
+                </div>
+                <div id="voiceCloning" class="collapsible-content">
+                    <div style="padding: 10px 0;">
+                        <input type="text" id="voiceClonePersonName" placeholder="Person's name" style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                        <input type="file" id="voiceCloneFile" accept="audio/*" style="display: none;" onchange="handleVoiceCloneFile(event)">
+                        <button class="compact-btn" onclick="document.getElementById('voiceCloneFile').click()" style="width: auto; border-radius: 5px; padding: 8px 15px;">📤 Upload Voice</button>
+                        <div id="voiceCloneStatus" style="margin-top: 10px; font-size: 0.9rem; min-height: 20px;"></div>
+                        <div id="clonedVoicesList" style="margin-top: 10px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Input -->
+            <div class="input-row">
+                <textarea id="emotionInput" class="compact-input" placeholder="Type your message..." rows="1"></textarea>
+                <button class="compact-btn send-btn" onclick="detectEmotion()" title="Send">📤</button>
+            </div>
+            <div id="recordingStatus" style="display: none; color: #ef4444; font-size: 0.9rem; text-align: center;">
+                <span id="recordingIndicator">●</span> Recording...
+            </div>
+            <audio id="audioPlayer" controls style="display: none; width: 100%; margin-top: 5px;"></audio>
+        </div>
+    </div>
+
+    <script src="app.js?v=2.0"></script>
+    <script src="facial-detection.js?v=1.0"></script>
+    <script src="voice-cloning.js?v=1.0"></script>
+    <script src="compact-ui.js?v=1.0"></script>
+</body>
+</html>

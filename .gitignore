@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+.vs/
+
+# Secrets
+appsettings.json
+appsettings.Development.json
+
+# User files
+*.user
+*.suo
+*.userosscache

@@ -1,0 +1,28 @@
+[
+  {
+    "ContainingType": "NeuroSync.Api.Controllers.EmotionController",
+    "Method": "DetectEmotion",
+    "RelativePath": "api/Emotion/detect",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "request",
+        "Type": "NeuroSync.Core.EmotionRequest",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "NeuroSync.Api.Controllers.EmotionController",
+    "Method": "GetEmotionTypes",
+    "RelativePath": "api/Emotion/types",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  }
+]

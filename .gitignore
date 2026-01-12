@@ -1,0 +1,41 @@
+# .NET
+bin/
+obj/
+.vs/
+
+# Secrets
+appsettings.json
+appsettings.Development.json
+
+# User files
+*.user
+*.suo
+*.userosscache
+
+# Temporary documentation files
+FIX_*.md
+DEBUG_*.md
+WHY_*.md
+TEST_*.md
+ALL_FIXES_*.md
+FINAL_FIX*.md
+SECURITY_WARNING.md
+YOUTUBE_TOKENS_ADDED.md
+QUICK_ENABLE_DEVICES.md
+QUICK_FIX*.md
+MUST_RESTART.md
+SEE_ERROR_IN_BROWSER.md
+GET_ERROR_DETAILS.md
+CHECK_SERVER_CONSOLE.md
+CLEAR_BROWSER_CACHE.md
+REFRESH_BROWSER.md
+SUCCESS.md
+ABOUT_HTTPS_WARNING.md
+FIXED_ERROR*.md
+USER_FIXES.md
+MODEL_FIX_*.md
+FACIAL_DETECTION_*.md
+REAL_TIME_FACIAL_DETECTION.md
+VIEW_MODEL_CONTENTS.md
+HOW_TO_SEE_MODELS.md
+RETRAIN_MODEL.md

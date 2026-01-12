@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroSync - Emotion-Aware Intelligent System</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 NeuroSync</h1>
+            <p class="subtitle">Emotion-Aware Intelligent System</p>
+        </header>
+
+        <div class="main-content">
+            <div class="input-section">
+                <h2>How are you feeling?</h2>
+                
+                <!-- Facial Expression Detection Section -->
+                <div class="facial-detection-section">
+                    <div class="camera-container">
+                        <video id="videoElement" autoplay playsinline style="display: none; width: 100%; max-width: 640px; border-radius: 10px;"></video>
+                        <canvas id="canvasElement" style="display: none;"></canvas>
+                        <div id="cameraPlaceholder" class="camera-placeholder">
+                            <p>📷 Enable camera for <strong>real-time emotion detection</strong></p>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 10px;">
+                                The system will automatically detect your emotions and provide comfort - no typing needed!
+                            </p>
+                            <button id="startCameraBtn" onclick="startFacialDetection()" class="camera-btn">📷 Start Real-Time Detection</button>
+                        </div>
+                        <div id="facialEmotionDisplay" class="facial-emotion-display" style="display: none;">
+                            <div class="facial-emotion-badge" id="facialEmotionBadge"></div>
+                            <div class="facial-confidence" id="facialConfidence"></div>
+                            <button id="stopCameraBtn" onclick="stopFacialDetection()" class="camera-btn stop-btn">⏹️ Stop Camera</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <textarea id="emotionInput" placeholder="Type how you're feeling... Or ask me to do something! (e.g., 'I'm feeling great!' or 'Play voice note of Sarah' or 'I miss mom')" rows="4"></textarea>
+                <div class="input-actions">
+                    <button id="detectButton" onclick="detectEmotion()">Detect Emotion</button>
+                    <button id="recordButton" onclick="toggleRecording()" class="record-btn">🎤 Record Voice</button>
+                    <button id="ttsToggleBtn" onclick="toggleTTS()" class="tts-toggle-btn" title="Toggle Text-to-Speech">🔇 TTS Off</button>
+                </div>
+                <div id="recordingStatus" style="display: none; margin-top: 10px; color: #ef4444;">
+                    <span id="recordingIndicator">●</span> Recording... Click again to stop
+                </div>
+                <audio id="audioPlayer" controls style="display: none; width: 100%; margin-top: 10px;"></audio>
+            </div>
+
+            <div class="voice-notes-section" style="margin-top: 20px;">
+                <h3>🎤 Voice Notes</h3>
+                <div id="voiceNotesList" class="voice-notes-list"></div>
+            </div>
+            
+            <div class="voice-cloning-section" style="margin-top: 20px; background: var(--surface); padding: 20px; border-radius: 10px;">
+                <h3>🎭 Voice Cloning</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 15px;">
+                    Upload a voice sample (15-60 seconds) to make the AI speak in that voice when you miss someone.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <input type="text" id="voiceClonePersonName" placeholder="Person's name (e.g., Dilshika)" style="padding: 8px; width: 100%; max-width: 300px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-light); color: var(--text-primary);">
+                    <input type="file" id="voiceCloneFile" accept="audio/*" style="display: none;" onchange="handleVoiceCloneFile(event)">
+                    <button onclick="document.getElementById('voiceCloneFile').click()" class="record-btn" style="width: fit-content;">📤 Upload Voice Sample</button>
+                </div>
+                <div id="voiceCloneStatus" style="margin-top: 10px; font-size: 0.9rem; min-height: 20px;"></div>
+                <div id="clonedVoicesList" class="voice-notes-list" style="margin-top: 15px;"></div>
+            </div>
+
+            <div class="results-section">
+                <div id="emotionResult" class="result-card" style="display: none;">
+                    <h3>Detected Emotion</h3>
+                    <div class="emotion-display">
+                        <span id="emotionType" class="emotion-badge"></span>
+                        <span id="emotionConfidence" class="confidence"></span>
+                    </div>
+                </div>
+
+                <div id="adaptiveResponse" class="result-card" style="display: none;">
+                    <h3>Adaptive Response</h3>
+                    <p id="responseMessage" class="response-message"></p>
+                    <div id="responseSuggestion" class="suggestion"></div>
+                </div>
+
+                <div id="iotActions" class="result-card" style="display: none;">
+                    <h3>IoT Device Actions <span class="simulation-badge">SIMULATION MODE</span></h3>
+                    <p class="simulation-notice">⚠️ These actions are simulated. To control real devices, integrate with IoT platforms (Philips Hue, Spotify, etc.).</p>
+                    <div id="iotActionsList" class="iot-actions-list"></div>
+                </div>
+            </div>
+
+            <div class="status-section">
+                <div id="connectionStatus" class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=2.0"></script>
+    <script src="facial-detection.js?v=1.0"></script>
+    <script src="voice-cloning.js?v=1.0"></script>
+</body>
+</html>
+

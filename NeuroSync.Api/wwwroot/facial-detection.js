@@ -25,30 +25,10 @@ async function loadFaceAPIModels() {
             return false;
         }
         
-        // Try local models first (if downloaded)
-        const LOCAL_MODEL_URL = '/models/face-api';
-        console.log('Attempting to load face-api.js models from local files...');
-        
-        try {
-            // Test if local models exist by trying to load one
-            await faceapi.nets.tinyFaceDetector.loadFromUri(LOCAL_MODEL_URL);
-            
-            // If successful, load all from local
-            console.log('Local models found! Loading from project folder...');
-            await Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri(LOCAL_MODEL_URL),
-                faceapi.nets.faceLandmark68Net.loadFromUri(LOCAL_MODEL_URL),
-                faceapi.nets.faceRecognitionNet.loadFromUri(LOCAL_MODEL_URL),
-                faceapi.nets.faceExpressionNet.loadFromUri(LOCAL_MODEL_URL)
-            ]);
-            
-            modelsLoaded = true;
-            console.log('✅ Face-api.js models loaded successfully from LOCAL files');
-            return true;
-        } catch (localError) {
-            console.log('Local models not found, loading from internet...');
-            // Fall through to internet loading
-        }
+        // Skip local model check - go straight to internet loading
+        // (Local models would need to be downloaded and placed in /models/face-api/)
+        // This prevents 404 errors from face-api.js trying to load non-existent local files
+        console.log('Loading face-api.js models from internet (local models not configured)...');
         
         // Load models from GitHub raw (fallback to internet)
         // These are the official model files from the face-api.js repository

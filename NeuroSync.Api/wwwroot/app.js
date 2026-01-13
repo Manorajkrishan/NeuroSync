@@ -1,82 +1,223 @@
-const API_BASE_URL = window.location.origin;
-const HUB_URL = `${API_BASE_URL}/emotionHub`;
+// Initialize API_BASE_URL safely
+let API_BASE_URL;
+let HUB_URL;
 
-// Make API_BASE_URL available globally for facial-detection.js
-window.API_BASE_URL = API_BASE_URL;
+if (typeof window !== 'undefined' && window.location) {
+    API_BASE_URL = window.location.origin;
+    HUB_URL = `${API_BASE_URL}/emotionHub`;
+    
+    // Make API_BASE_URL available globally for facial-detection.js
+    window.API_BASE_URL = API_BASE_URL;
+} else {
+    // Fallback for non-browser environments
+    API_BASE_URL = '';
+    HUB_URL = '/emotionHub';
+    if (typeof window !== 'undefined') {
+        window.API_BASE_URL = API_BASE_URL;
+    }
+}
 
 let connection = null;
+// Make connection available globally for companion-ui.js
+window.connection = null;
 
 // Initialize SignalR connection
 function initializeSignalR() {
-    connection = new signalR.HubConnectionBuilder()
-        .withUrl(HUB_URL)
-        .withAutomaticReconnect()
-        .build();
-
-    connection.on("Connected", (connectionId) => {
-        console.log("Connected to SignalR:", connectionId);
-        updateConnectionStatus(true);
-    });
-
-    connection.on("EmotionDetected", (result) => {
-        console.log("Emotion detected:", result);
-        displayEmotionResult(result);
-    });
-
-    connection.on("AdaptiveResponse", (response) => {
-        console.log("Adaptive response:", response);
-        displayAdaptiveResponse(response);
-    });
-
-    connection.on("IoTAction", (action) => {
-        console.log("IoT Action:", action);
-        displayIoTAction(action);
-    });
-
-    connection.onreconnecting(() => {
-        updateConnectionStatus(false);
-    });
-
-    connection.onreconnected(() => {
-        updateConnectionStatus(true);
-    });
-
-    connection.start()
-        .then(() => {
-            console.log("SignalR connection started");
-            updateConnectionStatus(true);
-        })
-        .catch(err => {
-            console.error("Error starting SignalR connection:", err);
-            updateConnectionStatus(false);
-        });
-}
-
-function updateConnectionStatus(connected) {
-    const statusDot = document.querySelector('.status-dot');
-    const statusText = document.getElementById('statusText');
+    console.log('initializeSignalR() called');
     
-    if (connected) {
-        statusDot.classList.add('connected');
-        statusText.textContent = 'Connected';
-    } else {
-        statusDot.classList.remove('connected');
-        statusText.textContent = 'Disconnected';
-    }
-}
-
-async function detectEmotion() {
-    const input = document.getElementById('emotionInput');
-    const text = input.value.trim();
-
-    if (!text) {
-        alert('Please enter some text to analyze');
+    // Check if SignalR is loaded
+    if (typeof signalR === 'undefined') {
+        console.error('SignalR library not loaded! Waiting for it...');
+        setTimeout(() => {
+            if (typeof signalR !== 'undefined') {
+                initializeSignalR();
+            } else {
+                console.error('SignalR library failed to load. Please check the script tag.');
+                updateConnectionStatus(false, 'SignalR not loaded');
+            }
+        }, 500);
         return;
     }
 
-    const button = document.getElementById('detectButton');
-    button.disabled = true;
-    button.textContent = 'Analyzing...';
+    console.log('SignalR library is loaded');
+
+    // Ensure HUB_URL is set
+    if (!HUB_URL) {
+        HUB_URL = window.location ? `${window.location.origin}/emotionHub` : '/emotionHub';
+        console.log('HUB_URL set to:', HUB_URL);
+    }
+
+    console.log('HUB_URL:', HUB_URL);
+
+    try {
+        console.log('Creating SignalR connection...');
+        console.log('SignalR library available:', typeof signalR !== 'undefined');
+        console.log('HubConnectionBuilder available:', typeof signalR?.HubConnectionBuilder !== 'undefined');
+        
+        connection = new signalR.HubConnectionBuilder()
+            .withUrl(HUB_URL)
+            .withAutomaticReconnect({
+                nextRetryDelayInMilliseconds: retryContext => {
+                    if (retryContext.elapsedMilliseconds < 60000) {
+                        return Math.min(1000 * Math.pow(2, retryContext.previousRetryCount), 30000);
+                    }
+                    return null; // Stop retrying after 60 seconds
+                }
+            })
+            .build();
+        
+        console.log('SignalR connection object created:', connection);
+        console.log('Connection state:', connection.state);
+        
+        // Make connection available globally
+        window.connection = connection;
+        console.log('Connection assigned to window.connection');
+
+        connection.on("Connected", (connectionId) => {
+            console.log("✅ Connected to SignalR:", connectionId);
+            updateConnectionStatus(true, 'Connected');
+        });
+
+        connection.on("EmotionDetected", (result) => {
+            console.log("Emotion detected:", result);
+            if (typeof displayEmotionResult === 'function') {
+                displayEmotionResult(result);
+            }
+        });
+
+        connection.on("AdaptiveResponse", (response) => {
+            console.log("Adaptive response:", response);
+            if (typeof displayAdaptiveResponse === 'function') {
+                displayAdaptiveResponse(response);
+            }
+        });
+
+        connection.on("IoTAction", (action) => {
+            console.log("IoT Action:", action);
+            if (typeof displayIoTAction === 'function') {
+                displayIoTAction(action);
+            }
+        });
+
+        connection.onreconnecting((error) => {
+            console.warn("SignalR reconnecting...", error);
+            updateConnectionStatus(false, 'Reconnecting...');
+        });
+
+        connection.onreconnected((connectionId) => {
+            console.log("✅ SignalR reconnected:", connectionId);
+            updateConnectionStatus(true, 'Connected');
+        });
+
+        connection.onclose((error) => {
+            console.warn("SignalR connection closed", error);
+            updateConnectionStatus(false, 'Disconnected');
+            
+            // Try to reconnect after 3 seconds
+            setTimeout(() => {
+                if (connection && connection.state === signalR.HubConnectionState.Disconnected) {
+                    console.log('Attempting to reconnect...');
+                    connection.start().catch(err => {
+                        console.error('Reconnection failed:', err);
+                    });
+                }
+            }, 3000);
+        });
+
+        // Start the connection
+        connection.start()
+            .then(() => {
+                console.log("✅ SignalR connection started successfully");
+                updateConnectionStatus(true, 'Connected');
+                
+                // Notify companion-ui.js that connection is ready
+                if (typeof window.setupSignalRHandlers === 'function') {
+                    window.setupSignalRHandlers();
+                }
+            })
+            .catch(err => {
+                console.error("❌ Error starting SignalR connection:", err);
+                console.error("Error details:", {
+                    message: err.message,
+                    stack: err.stack,
+                    HUB_URL: HUB_URL,
+                    signalRAvailable: typeof signalR !== 'undefined'
+                });
+                updateConnectionStatus(false, 'Connection failed: ' + (err.message || 'Unknown error'));
+                
+                // Show more helpful error message
+                if (err.message && err.message.includes('Failed to start')) {
+                    console.error('SignalR connection failed. Check if server is running and hub is configured correctly.');
+                }
+                
+                // Retry after 5 seconds
+                setTimeout(() => {
+                    if (connection && connection.state === signalR.HubConnectionState.Disconnected) {
+                        console.log('Retrying SignalR connection...');
+                        initializeSignalR();
+                    }
+                }, 5000);
+            });
+    } catch (error) {
+        console.error('Error creating SignalR connection:', error);
+        updateConnectionStatus(false, 'Initialization failed');
+    }
+}
+
+function updateConnectionStatus(connected, message = null) {
+    const statusDot = document.querySelector('.status-dot');
+    const statusText = document.getElementById('statusText');
+    
+    if (!statusDot || !statusText) {
+        // Elements might not exist yet, try again later
+        setTimeout(() => updateConnectionStatus(connected, message), 100);
+        return;
+    }
+    
+    if (connected) {
+        statusDot.classList.add('connected');
+        statusDot.classList.remove('offline');
+        statusText.textContent = message || 'Connected';
+    } else {
+        statusDot.classList.remove('connected');
+        statusDot.classList.add('offline');
+        statusText.textContent = message || 'Disconnected';
+    }
+}
+
+async function detectEmotion(textParam = null) {
+    // Support both old UI (emotionInput) and new UI (messageInput or textParam)
+    let text = textParam;
+    
+    if (!text) {
+        const input = document.getElementById('messageInput') || document.getElementById('emotionInput');
+        if (!input) {
+            console.error('No input element found');
+            return;
+        }
+        text = input.value.trim();
+    }
+
+    if (!text) {
+        // Don't show alert for empty text - just return silently
+        return;
+    }
+
+    // Try to find button (may not exist in new UI)
+    const button = document.getElementById('detectButton') || document.getElementById('sendBtn');
+    if (button) {
+        button.disabled = true;
+        const originalText = button.textContent;
+        button.textContent = 'Analyzing...';
+        
+        // Re-enable button after a delay (will be re-enabled in finally block too)
+        setTimeout(() => {
+            if (button) {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }, 5000);
+    }
 
     try {
         // Get or create user ID
@@ -176,10 +317,20 @@ async function detectEmotion() {
             console.error('Display error (emotion was detected successfully):', error);
         }
     } finally {
-        button.disabled = false;
-        button.textContent = 'Detect Emotion';
+        // Re-enable button if it exists
+        const button = document.getElementById('detectButton') || document.getElementById('sendBtn');
+        if (button) {
+            button.disabled = false;
+            // Only restore text if it's the old UI button
+            if (document.getElementById('detectButton')) {
+                button.textContent = 'Detect Emotion';
+            }
+        }
     }
 }
+
+// Expose globally for companion-ui.js
+window.detectEmotion = detectEmotion;
 
 // Map emotion enum values to names
 const emotionNames = {
@@ -505,12 +656,19 @@ function displayIoTActions(actions) {
 }
 
 // Voice recording functionality
+// Make these available globally for companion-ui.js
 let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
+// Expose to window for global access
+window.mediaRecorder = mediaRecorder;
+window.audioChunks = audioChunks;
+window.isRecording = isRecording;
+
 async function toggleRecording() {
     const recordButton = document.getElementById('recordButton');
+    const voiceBtn = document.getElementById('voiceBtn');
     const recordingStatus = document.getElementById('recordingStatus');
     
     if (!isRecording) {
@@ -519,8 +677,13 @@ async function toggleRecording() {
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             
+            // Sync with window
+            window.mediaRecorder = mediaRecorder;
+            window.audioChunks = audioChunks;
+            
             mediaRecorder.ondataavailable = (event) => {
                 audioChunks.push(event.data);
+                window.audioChunks = audioChunks;
             };
             
             mediaRecorder.onstop = async () => {
@@ -531,9 +694,19 @@ async function toggleRecording() {
             
             mediaRecorder.start();
             isRecording = true;
-            recordButton.textContent = '⏹️ Stop Recording';
-            recordButton.style.backgroundColor = '#ef4444';
-            recordingStatus.style.display = 'block';
+            window.isRecording = true;
+            
+            if (recordButton) {
+                recordButton.textContent = '⏹️ Stop Recording';
+                recordButton.style.backgroundColor = '#ef4444';
+            }
+            if (voiceBtn) {
+                voiceBtn.textContent = '⏹️';
+                voiceBtn.style.backgroundColor = '#ef4444';
+            }
+            if (recordingStatus) {
+                recordingStatus.style.display = 'block';
+            }
         } catch (error) {
             console.error('Error accessing microphone:', error);
             alert('Could not access microphone. Please check permissions.');
@@ -542,12 +715,25 @@ async function toggleRecording() {
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
             isRecording = false;
-            recordButton.textContent = '🎤 Record Voice';
-            recordButton.style.backgroundColor = '';
-            recordingStatus.style.display = 'none';
+            window.isRecording = false;
+            
+            if (recordButton) {
+                recordButton.textContent = '🎤 Record Voice';
+                recordButton.style.backgroundColor = '';
+            }
+            if (voiceBtn) {
+                voiceBtn.textContent = '🎤';
+                voiceBtn.style.backgroundColor = '';
+            }
+            if (recordingStatus) {
+                recordingStatus.style.display = 'none';
+            }
         }
     }
 }
+
+// Expose globally for companion-ui.js
+window.toggleRecording = toggleRecording;
 
 async function uploadVoiceNote(audioBlob) {
     const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
@@ -661,10 +847,17 @@ function displayActionResult(actionResult) {
 async function playVoiceNote(voiceNoteId) {
     const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
     const audioPlayer = document.getElementById('audioPlayer');
+    if (!audioPlayer) {
+        console.warn('audioPlayer element not found');
+        return;
+    }
     audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${voiceNoteId}?userId=${userId}`;
     audioPlayer.style.display = 'block';
-    audioPlayer.play();
+    audioPlayer.play().catch(err => console.error('Error playing audio:', err));
 }
+
+// Expose globally for companion-ui.js
+window.playVoiceNote = playVoiceNote;
 
 async function loadVoiceNotes() {
     const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
@@ -677,7 +870,10 @@ async function loadVoiceNotes() {
     } catch (error) {
         console.error('Error loading voice notes:', error);
     }
-};
+}
+
+// Expose globally for companion-ui.js
+window.loadVoiceNotes = loadVoiceNotes;
 
 function displayVoiceNotes(voiceNotes) {
     const list = document.getElementById('voiceNotesList');
@@ -697,21 +893,60 @@ function displayVoiceNotes(voiceNotes) {
     `).join('');
 }
 
-// Load voice notes on page load
-window.addEventListener('load', () => {
-    loadVoiceNotes();
-});
+// Load voice notes on page load - only if not already handled by companion-ui.js
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('load', () => {
+        // Only load if companion-ui.js hasn't already done it
+        if (typeof window.companionUIInitialized === 'undefined') {
+            if (typeof loadVoiceNotes === 'function') {
+                loadVoiceNotes();
+            }
+        }
+    });
+}
 
-// Allow Enter key to submit (Shift+Enter for new line)
-document.getElementById('emotionInput').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        detectEmotion();
-    }
-});
+// Allow Enter key to submit (Shift+Enter for new line) - only if emotionInput exists
+// Note: This is for the old UI. The new UI uses messageInput handled by companion-ui.js
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', function() {
+        const emotionInput = document.getElementById('emotionInput');
+        if (emotionInput && emotionInput.addEventListener) {
+            emotionInput.addEventListener('keydown', function(e) {
+                if (e && e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (typeof detectEmotion === 'function') {
+                        detectEmotion();
+                    }
+                }
+            });
+        }
+    });
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-    initializeSignalR();
-});
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, checking SignalR availability...');
+        
+        // Wait a bit for SignalR library to load
+        setTimeout(() => {
+            if (typeof signalR === 'undefined') {
+                console.error('SignalR library not loaded! Check if script tag is present in HTML.');
+                updateConnectionStatus(false, 'SignalR library missing');
+                return;
+            }
+            
+            if (typeof initializeSignalR === 'function') {
+                console.log('Calling initializeSignalR()...');
+                try {
+                    initializeSignalR();
+                } catch (error) {
+                    console.error('Error in initializeSignalR:', error);
+                    console.error('Error stack:', error.stack);
+                    updateConnectionStatus(false, 'Init error: ' + error.message);
+                }
+            } else {
+                console.error('initializeSignalR function not found!');
+            }
+        }, 100);
+    });
+}
 

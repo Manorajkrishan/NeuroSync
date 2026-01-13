@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeuroSync - Your AI Companion</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-new.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
@@ -29,8 +29,8 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
-                <button class="icon-btn" id="cameraBtn" title="Camera">📷</button>
+                <button class="icon-btn" id="settingsBtn" title="Settings" onclick="toggleSettings()">⚙️</button>
+                <button class="icon-btn" id="cameraBtn" title="Camera" onclick="toggleCamera()">📷</button>
             </div>
         </div>
 
@@ -47,10 +47,10 @@
 
         <!-- Quick Emotion Buttons (Contextual) -->
         <div id="quickEmotions" class="quick-emotions" style="display: none;">
-            <button class="emotion-quick-btn" data-emotion="happy">😊 Happy</button>
-            <button class="emotion-quick-btn" data-emotion="sad">😢 Sad</button>
-            <button class="emotion-quick-btn" data-emotion="anxious">😰 Anxious</button>
-            <button class="emotion-quick-btn" data-emotion="calm">😌 Calm</button>
+            <button class="emotion-quick-btn" data-emotion="happy" onclick="quickEmotion('happy')">😊 Happy</button>
+            <button class="emotion-quick-btn" data-emotion="sad" onclick="quickEmotion('sad')">😢 Sad</button>
+            <button class="emotion-quick-btn" data-emotion="anxious" onclick="quickEmotion('anxious')">😰 Anxious</button>
+            <button class="emotion-quick-btn" data-emotion="calm" onclick="quickEmotion('calm')">😌 Calm</button>
         </div>
 
         <!-- Input Area -->
@@ -60,10 +60,12 @@
                     id="messageInput" 
                     class="message-input" 
                     placeholder="How are you feeling today?" 
-                    rows="1"></textarea>
+                    rows="1"
+                    onkeydown="handleInputKeydown(event)"
+                    oninput="autoResizeTextarea(this)"></textarea>
                 <div class="input-actions">
-                    <button class="input-action-btn" id="voiceBtn" title="Record Voice">🎤</button>
-                    <button class="input-action-btn" id="sendBtn" title="Send">➤</button>
+                    <button class="input-action-btn" id="voiceBtn" title="Record Voice" onclick="toggleRecording()">🎤</button>
+                    <button class="input-action-btn" id="sendBtn" title="Send" onclick="sendMessage()">➤</button>
                 </div>
             </div>
             <div id="recordingStatus" class="recording-status" style="display: none;">
@@ -76,13 +78,13 @@
         <div id="sidebar" class="sidebar" style="display: none;">
             <div class="sidebar-header">
                 <h3>Settings</h3>
-                <button class="close-btn" id="closeSidebarBtn">✕</button>
+                <button class="close-btn" onclick="closeSidebar()">✕</button>
             </div>
             <div class="sidebar-content">
                 <!-- TTS Toggle -->
                 <div class="sidebar-section">
                     <label class="toggle-label">
-                        <input type="checkbox" id="ttsToggle">
+                        <input type="checkbox" id="ttsToggle" onchange="toggleTTS()">
                         <span>Text-to-Speech</span>
                         <span id="ttsStatus" class="toggle-status">Off</span>
                     </label>
@@ -92,8 +94,8 @@
                 <div class="sidebar-section">
                     <h4>🎭 Voice Cloning</h4>
                     <input type="text" id="voiceClonePersonName" placeholder="Person's name" class="sidebar-input">
-                    <input type="file" id="voiceCloneFile" accept="audio/*" style="display: none;">
-                    <button class="sidebar-btn" id="uploadVoiceBtn">Upload Voice Sample</button>
+                    <input type="file" id="voiceCloneFile" accept="audio/*" style="display: none;" onchange="handleVoiceCloneFile(event)">
+                    <button class="sidebar-btn" onclick="document.getElementById('voiceCloneFile').click()">Upload Voice Sample</button>
                     <div id="voiceCloneStatus" class="sidebar-status"></div>
                 </div>
 
@@ -101,15 +103,15 @@
                 <div class="sidebar-section">
                     <h4>🔒 Privacy & Consent</h4>
                     <label class="toggle-label">
-                        <input type="checkbox" id="consentEmotionSensing">
+                        <input type="checkbox" id="consentEmotionSensing" onchange="toggleConsent('emotionSensing')">
                         <span>Emotion Sensing</span>
                     </label>
                     <label class="toggle-label">
-                        <input type="checkbox" id="consentVisualLayer">
+                        <input type="checkbox" id="consentVisualLayer" onchange="toggleConsent('visualLayer')">
                         <span>Visual Layer (Camera)</span>
                     </label>
                     <label class="toggle-label">
-                        <input type="checkbox" id="consentAudioLayer">
+                        <input type="checkbox" id="consentAudioLayer" onchange="toggleConsent('audioLayer')">
                         <span>Audio Layer</span>
                     </label>
                 </div>
@@ -127,7 +129,7 @@
             <div class="camera-container">
                 <div class="camera-header">
                     <h3>Facial Expression Detection</h3>
-                    <button class="close-btn" id="closeCameraBtn">✕</button>
+                    <button class="close-btn" onclick="toggleCamera()">✕</button>
                 </div>
                 <video id="videoElement" autoplay playsinline></video>
                 <canvas id="canvasElement" style="display: none;"></canvas>
@@ -135,19 +137,19 @@
                     <div class="facial-emotion-badge" id="facialEmotionBadge"></div>
                     <div class="facial-confidence" id="facialConfidence"></div>
                 </div>
-                <button id="startCameraBtn" class="camera-btn">📷 Start Detection</button>
-                <button id="stopCameraBtn" class="camera-btn stop-btn" style="display: none;">⏹️ Stop</button>
+                <button id="startCameraBtn" class="camera-btn" onclick="startFacialDetection()">📷 Start Detection</button>
+                <button id="stopCameraBtn" class="camera-btn stop-btn" onclick="stopFacialDetection()" style="display: none;">⏹️ Stop</button>
             </div>
         </div>
 
         <!-- Overlay (for sidebar/camera) -->
-        <div id="overlay" class="overlay" style="display: none;"></div>
+        <div id="overlay" class="overlay" onclick="closeSidebar(); toggleCamera();" style="display: none;"></div>
     </div>
 
     <!-- Scripts -->
-    <script src="app.js?v=3.7"></script>
-    <script src="facial-detection.js?v=1.2"></script>
+    <script src="app.js?v=3.0"></script>
+    <script src="facial-detection.js?v=1.0"></script>
     <script src="voice-cloning.js?v=1.0"></script>
-    <script src="companion-ui.js?v=1.6"></script>
+    <script src="companion-ui.js?v=1.0"></script>
 </body>
 </html>

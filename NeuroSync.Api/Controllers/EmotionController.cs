@@ -135,6 +135,67 @@ public class EmotionController : ControllerBase
                 return BadRequest(new { error = $"Invalid emotion type: {request.Emotion}" });
             }
 
+            // Get conversation memory to check context
+            var conversationMemory = HttpContext.RequestServices.GetService<ConversationMemory>();
+            var context = conversationMemory?.GetOrCreateContext(userId);
+            
+            // Smart response logic: Only respond to significant emotion changes or strong emotions
+            // Don't spam responses for neutral states or minor fluctuations
+            bool shouldRespond = false;
+            string? reason = null;
+            
+            // Check if this is a significant emotion change
+            if (context != null && context.LastEmotion.HasValue)
+            {
+                var lastEmotion = context.LastEmotion.Value;
+                var timeSinceLastResponse = context.LastInteraction.HasValue 
+                    ? (DateTime.UtcNow - context.LastInteraction.Value).TotalSeconds 
+                    : 999;
+                
+                // Respond if:
+                // 1. Emotion changed significantly (not neutral -> neutral)
+                if (lastEmotion != emotionType && emotionType != EmotionType.Neutral)
+                {
+                    shouldRespond = true;
+                    reason = "emotion_change";
+                }
+                // 2. Strong negative emotion detected (always respond)
+                else if ((emotionType == EmotionType.Sad || emotionType == EmotionType.Anxious || 
+                          emotionType == EmotionType.Angry) && request.Confidence > 0.7f)
+                {
+                    shouldRespond = true;
+                    reason = "strong_negative_emotion";
+                }
+                // 3. Strong positive emotion (happy/excited) with high confidence
+                else if ((emotionType == EmotionType.Happy || emotionType == EmotionType.Excited) && 
+                         request.Confidence > 0.8f && timeSinceLastResponse > 10)
+                {
+                    shouldRespond = true;
+                    reason = "strong_positive_emotion";
+                }
+                // 4. No response in last 30 seconds and user seems engaged (not just neutral)
+                else if (timeSinceLastResponse > 30 && emotionType != EmotionType.Neutral && request.Confidence > 0.75f)
+                {
+                    shouldRespond = true;
+                    reason = "periodic_check";
+                }
+                // 5. Don't respond to neutral unless it's been a long time (60+ seconds)
+                else if (emotionType == EmotionType.Neutral && timeSinceLastResponse > 60)
+                {
+                    shouldRespond = true;
+                    reason = "periodic_neutral_check";
+                }
+            }
+            else
+            {
+                // First interaction - only respond to strong emotions, not neutral
+                if (emotionType != EmotionType.Neutral && request.Confidence > 0.7f)
+                {
+                    shouldRespond = true;
+                    reason = "first_interaction";
+                }
+            }
+
             // Create emotion result from facial expression
             var emotionResult = new EmotionResult
             {
@@ -143,22 +204,48 @@ public class EmotionController : ControllerBase
                 OriginalText = $"Facial expression detected: {request.Emotion}"
             };
 
-            // Generate adaptive response with emotional intelligence
-            var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, $"I'm feeling {request.Emotion}");
-
-            // Get IoT actions (async to ensure real device parameters are populated)
-            var iotActions = await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion);
-
-            // Send real-time updates via SignalR
-            await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
-            await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
+            // Only generate and send response if we should respond
+            AdaptiveResponse? adaptiveResponse = null;
+            List<IoTAction>? iotActions = null;
             
-            foreach (var action in iotActions)
+            if (shouldRespond)
             {
-                await _hubContext.Clients.All.SendAsync("IoTAction", action);
+                _logger.LogInformation($"Responding to facial emotion: {emotionType} (confidence: {request.Confidence:P2}, reason: {reason})");
+                
+                // Generate adaptive response with emotional intelligence
+                adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, $"I'm feeling {request.Emotion}");
+
+                // Get IoT actions (async to ensure real device parameters are populated)
+                iotActions = await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion);
+
+                // Send real-time updates via SignalR
+                await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
+                await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
+                
+                foreach (var action in iotActions)
+                {
+                    await _hubContext.Clients.All.SendAsync("IoTAction", action);
+                }
+                
+                // Update conversation memory
+                if (conversationMemory != null && adaptiveResponse != null)
+                {
+                    conversationMemory.AddEntry(userId, $"Facial: {request.Emotion}", emotionResult, adaptiveResponse);
+                }
+            }
+            else
+            {
+                // Still update emotion detection for tracking, but don't send response
+                _logger.LogDebug($"Facial emotion detected but not responding: {emotionType} (confidence: {request.Confidence:P2}) - too soon or neutral");
+                
+                // Update last emotion in context without sending response
+                if (context != null)
+                {
+                    context.LastEmotion = emotionType;
+                }
             }
 
-            // Collect real-world data for continuous learning
+            // Collect real-world data for continuous learning (always, even if not responding)
             if (emotionResult.Confidence >= 0.7f)
             {
                 var dataCollector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
@@ -169,7 +256,9 @@ public class EmotionController : ControllerBase
             {
                 emotion = emotionResult,
                 adaptiveResponse = adaptiveResponse,
-                iotActions = iotActions
+                iotActions = iotActions,
+                responded = shouldRespond,
+                reason = reason
             });
         }
         catch (Exception ex)

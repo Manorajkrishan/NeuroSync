@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("NeuroSync.Core")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+89cc1467a3fbb6ecc4aa3c5d523c3548a7a3a519")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+44f2c3db017c784e898e0b0978bfa0cdfe8ab863")]
 [assembly: System.Reflection.AssemblyProductAttribute("NeuroSync.Core")]
 [assembly: System.Reflection.AssemblyTitleAttribute("NeuroSync.Core")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

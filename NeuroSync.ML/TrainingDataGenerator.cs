@@ -260,7 +260,7 @@ public static class TrainingDataGenerator
     {
         var data = new List<EmotionData>();
         
-        // Modern work/school stress scenarios
+        // Modern work/school stress scenarios - EXPANDED with exam situations
         var workStress = new[]
         {
             new EmotionData { Text = "I have so much work to do, I'm overwhelmed.", Label = "anxious" },
@@ -272,7 +272,46 @@ public static class TrainingDataGenerator
             new EmotionData { Text = "I aced my exam today!", Label = "happy" },
             new EmotionData { Text = "Failed my test, I feel terrible.", Label = "sad" },
             new EmotionData { Text = "I'm burned out from work.", Label = "frustrated" },
-            new EmotionData { Text = "Got a raise! This is amazing!", Label = "happy" }
+            new EmotionData { Text = "Got a raise! This is amazing!", Label = "happy" },
+            // Exam-specific situations - CRITICAL for better detection
+            new EmotionData { Text = "i messs my exam", Label = "sad" },
+            new EmotionData { Text = "I missed my exam", Label = "sad" },
+            new EmotionData { Text = "I messed up my exam", Label = "sad" },
+            new EmotionData { Text = "I failed my exam", Label = "sad" },
+            new EmotionData { Text = "I did bad on my exam", Label = "sad" },
+            new EmotionData { Text = "My exam went terrible", Label = "sad" },
+            new EmotionData { Text = "I bombed my exam", Label = "sad" },
+            new EmotionData { Text = "I'm worried about my exam", Label = "anxious" },
+            new EmotionData { Text = "I'm stressed about my exam", Label = "anxious" },
+            new EmotionData { Text = "I'm nervous about my exam", Label = "anxious" },
+            new EmotionData { Text = "I passed my exam!", Label = "happy" },
+            new EmotionData { Text = "I did great on my exam", Label = "happy" },
+            new EmotionData { Text = "I aced my exam", Label = "happy" },
+            // Help requests - should detect emotion from context
+            new EmotionData { Text = "can u help me", Label = "sad" }, // Usually sad when asking for help
+            new EmotionData { Text = "can you help me", Label = "sad" },
+            new EmotionData { Text = "I need help", Label = "sad" },
+            new EmotionData { Text = "please help me", Label = "sad" },
+            new EmotionData { Text = "I need someone to talk", Label = "sad" },
+            new EmotionData { Text = "I need someone to talk to", Label = "sad" },
+            new EmotionData { Text = "I'm not good", Label = "sad" },
+            new EmotionData { Text = "I'm not doing good", Label = "sad" },
+            new EmotionData { Text = "I'm not feeling good", Label = "sad" },
+            new EmotionData { Text = "I feel bad", Label = "sad" },
+            new EmotionData { Text = "I'm not okay", Label = "sad" },
+            new EmotionData { Text = "I'm struggling", Label = "sad" },
+            new EmotionData { Text = "I need support", Label = "sad" },
+            new EmotionData { Text = "I need someone", Label = "sad" },
+            new EmotionData { Text = "I'm alone", Label = "sad" },
+            new EmotionData { Text = "I feel lonely", Label = "sad" },
+            new EmotionData { Text = "I'm having a hard time", Label = "sad" },
+            new EmotionData { Text = "I'm going through a lot", Label = "sad" },
+            new EmotionData { Text = "I'm dealing with a lot", Label = "sad" },
+            new EmotionData { Text = "I'm overwhelmed", Label = "anxious" },
+            new EmotionData { Text = "I'm stressed", Label = "anxious" },
+            new EmotionData { Text = "I'm worried", Label = "anxious" },
+            new EmotionData { Text = "I'm anxious", Label = "anxious" },
+            new EmotionData { Text = "I'm nervous", Label = "anxious" }
         };
         data.AddRange(workStress);
         

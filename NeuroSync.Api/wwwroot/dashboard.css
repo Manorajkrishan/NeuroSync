@@ -1,0 +1,405 @@
+/* Human OS Dashboard Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+}
+
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+.dashboard-header {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 20px 30px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header-left h1 {
+    font-size: 2rem;
+    color: #667eea;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.header-right {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.user-info {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ccc;
+}
+
+.status-dot.connected {
+    background: #10b981;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.offline {
+    background: #ef4444;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Dashboard Main */
+.dashboard-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.dashboard-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.dashboard-row .widget.full-width {
+    grid-column: 1 / -1;
+}
+
+/* Widgets */
+.widget {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.widget:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+}
+
+.widget h3 {
+    font-size: 1.2rem;
+    margin-bottom: 16px;
+    color: #667eea;
+}
+
+/* Emotional State Widget */
+.emotion-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.emotion-badge {
+    font-size: 2rem;
+    font-weight: bold;
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: #f3f4f6;
+    color: #333;
+    transition: all 0.3s;
+}
+
+.emotion-badge.happy { background: #fef3c7; color: #92400e; }
+.emotion-badge.sad { background: #dbeafe; color: #1e40af; }
+.emotion-badge.anxious { background: #fee2e2; color: #991b1b; }
+.emotion-badge.calm { background: #d1fae5; color: #065f46; }
+.emotion-badge.excited { background: #fde68a; color: #78350f; }
+.emotion-badge.neutral { background: #f3f4f6; color: #374151; }
+
+.confidence {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.emotion-trend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.trend-indicator {
+    font-size: 1.2rem;
+}
+
+/* Stress Monitor Widget */
+.stress-display, .mental-load-display {
+    margin-bottom: 16px;
+}
+
+.stress-bar, .load-bar {
+    width: 100%;
+    height: 24px;
+    background: #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.stress-fill, .load-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%);
+    transition: width 0.5s;
+    border-radius: 12px;
+}
+
+.stress-value, .load-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #333;
+}
+
+.energy-display {
+    font-size: 1rem;
+    color: #666;
+}
+
+/* Domains Grid */
+.domains-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+}
+
+.domain-card {
+    text-align: center;
+    padding: 20px;
+    border-radius: 12px;
+    background: #f9fafb;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.domain-card:hover {
+    background: #f3f4f6;
+    transform: scale(1.05);
+}
+
+.domain-card.healthy {
+    border: 2px solid #10b981;
+}
+
+.domain-card.at-risk {
+    border: 2px solid #f59e0b;
+}
+
+.domain-card.unhealthy {
+    border: 2px solid #ef4444;
+}
+
+.domain-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.domain-name {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.domain-score {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #667eea;
+    margin-bottom: 4px;
+}
+
+.domain-status {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Burnout Risk Widget */
+.risk-display {
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.risk-score {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.risk-level {
+    font-size: 1.2rem;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+.risk-level.low { background: #d1fae5; color: #065f46; }
+.risk-level.moderate { background: #fef3c7; color: #92400e; }
+.risk-level.high { background: #fed7aa; color: #9a3412; }
+.risk-level.critical { background: #fee2e2; color: #991b1b; }
+
+.factors-list {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.factors-list ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.factors-list li {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+/* Growth Widget */
+.growth-display {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.growth-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #667eea;
+}
+
+.growth-trend {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Insights & Actions */
+.insights-list, .actions-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.insights-list ul, .actions-list ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.insights-list li, .actions-list li {
+    margin: 12px 0;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border-left: 4px solid #667eea;
+}
+
+/* Decisions & Story */
+.decisions-list, .story-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #666;
+}
+
+.decisions-list .decision-item {
+    padding: 12px;
+    margin: 8px 0;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.story-text {
+    padding: 16px;
+    background: #f9fafb;
+    border-radius: 8px;
+    line-height: 1.8;
+}
+
+/* Footer */
+.dashboard-footer {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.refresh-btn {
+    padding: 12px 24px;
+    font-size: 1rem;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.refresh-btn:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+}
+
+/* Loading & Empty States */
+.loading, .empty {
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .dashboard-row {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-header {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+
+    .domains-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

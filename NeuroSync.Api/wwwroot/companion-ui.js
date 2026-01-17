@@ -6,6 +6,113 @@ let companionMediaRecorder = null;
 let companionAudioChunks = [];
 let currentUserId = sessionStorage.getItem('neuroSync_userId') || sessionStorage.getItem('userId') || 'default';
 
+// IMPORTANT: Use lazy loading to get real functions when needed
+// This prevents issues with script loading order
+// Helper to safely get real function (with recursion guard)
+let _callingToggleTTS = false;
+let _callingStartFacialDetection = false;
+let _callingStopFacialDetection = false;
+let _callingToggleRecording = false;
+
+// Store references to real functions (captured after scripts load)
+// These will be set when the scripts finish loading
+let _storedRealToggleTTS = null;
+let _storedRealStartFacialDetection = null;
+let _storedRealStopFacialDetection = null;
+let _storedRealToggleRecording = null;
+
+// Don't capture immediately - wait for scripts to load
+// We'll capture them in the polling mechanism below
+
+// Helper functions to get real functions (use stored reference first, then fallback to window)
+function getRealToggleTTS() {
+    // First try stored reference (captured before wrapper was defined)
+    if (_storedRealToggleTTS && typeof _storedRealToggleTTS === 'function') {
+        return _storedRealToggleTTS;
+    }
+    // Fallback: try window (but check it's not our wrapper)
+    const ref = window.toggleTTS;
+    if (ref && typeof ref === 'function' && ref !== toggleTTS) {
+        _storedRealToggleTTS = ref; // Update stored reference
+        return ref;
+    }
+    return null;
+}
+
+function getRealStartFacialDetection() {
+    // First try stored reference (captured before wrapper was defined)
+    if (_storedRealStartFacialDetection && typeof _storedRealStartFacialDetection === 'function') {
+        return _storedRealStartFacialDetection;
+    }
+    // Fallback: try window (but check it's not our wrapper)
+    const ref = window.startFacialDetection;
+    if (ref && typeof ref === 'function' && ref !== startFacialDetection) {
+        _storedRealStartFacialDetection = ref; // Update stored reference
+        return ref;
+    }
+    return null;
+}
+
+function getRealStopFacialDetection() {
+    // First try stored reference (captured before wrapper was defined)
+    if (_storedRealStopFacialDetection && typeof _storedRealStopFacialDetection === 'function') {
+        return _storedRealStopFacialDetection;
+    }
+    // Fallback: try window (but check it's not our wrapper)
+    const ref = window.stopFacialDetection;
+    if (ref && typeof ref === 'function' && ref !== stopFacialDetection) {
+        _storedRealStopFacialDetection = ref; // Update stored reference
+        return ref;
+    }
+    return null;
+}
+
+// Poll for real functions and capture them (scripts load before us)
+// We need to identify the REAL functions, not our wrappers
+if (typeof window !== 'undefined') {
+    let pollCount = 0;
+    const maxPolls = 50; // Increased to wait longer
+    const pollInterval = setInterval(() => {
+        pollCount++;
+        if (pollCount > maxPolls) {
+            clearInterval(pollInterval);
+            // Silently complete - functions may not be needed (optional features)
+            return;
+        }
+        
+        // Capture real functions - but only if they're NOT our wrappers
+        // We can identify our wrappers by checking if they have the recursion guard variables
+        if (!_storedRealToggleTTS && window.toggleTTS && typeof window.toggleTTS === 'function') {
+            // Check if it's NOT our wrapper (our wrapper will be defined later, so this should be the real one)
+            // Actually, we can't check this easily, so we'll capture it before our wrapper is defined
+            // But since scripts load before us, window.toggleTTS should be the real one
+            _storedRealToggleTTS = window.toggleTTS;
+            console.log('companion-ui: Captured real toggleTTS');
+        }
+        if (!_storedRealStartFacialDetection && window.startFacialDetection && typeof window.startFacialDetection === 'function') {
+            // Check if it's the real function from facial-detection.js
+            // The real function will have been set by facial-detection.js before companion-ui.js loads
+            // So if it exists now, it should be the real one (our wrapper isn't defined yet)
+            _storedRealStartFacialDetection = window.startFacialDetection;
+            console.log('companion-ui: Captured real startFacialDetection');
+        }
+        if (!_storedRealStopFacialDetection && window.stopFacialDetection && typeof window.stopFacialDetection === 'function') {
+            _storedRealStopFacialDetection = window.stopFacialDetection;
+            console.log('companion-ui: Captured real stopFacialDetection');
+        }
+        if (!_storedRealToggleRecording && window.toggleRecording && typeof window.toggleRecording === 'function') {
+            _storedRealToggleRecording = window.toggleRecording;
+            console.log('companion-ui: Captured real toggleRecording');
+        }
+        
+        // Stop polling once we have all references (or timeout)
+    }, 50); // Check more frequently
+}
+
+// Mark our wrapper functions so we can identify them
+// This helps prevent calling ourselves
+let _isCompanionUIWrapper = true;
+
 // Initialize companion UI
 if (typeof window !== 'undefined') {
     window.addEventListener('load', function() {
@@ -66,6 +173,13 @@ if (typeof window !== 'undefined') {
             }
         }, 300);
         
+        // Auto-start corner camera (wait for scripts to load)
+        setTimeout(() => {
+            if (typeof startCornerCamera === 'function') {
+                startCornerCamera();
+            }
+        }, 1500);
+        
         if (typeof setupInputHandlers === 'function') {
             setupInputHandlers();
         }
@@ -99,11 +213,16 @@ function initializeCompanionUI() {
         });
     }
     
-    // Set up voice button
+    // Set up voice button - use real function from app.js directly
     const voiceBtn = document.getElementById('voiceBtn');
     if (voiceBtn) {
         voiceBtn.addEventListener('click', function() {
-            toggleRecording();
+            // Use real function from app.js directly (it's exposed on window)
+            if (typeof window.toggleRecording === 'function') {
+                window.toggleRecording();
+            } else {
+                console.warn('toggleRecording not available yet');
+            }
         });
     }
     
@@ -115,13 +234,7 @@ function initializeCompanionUI() {
         });
     }
     
-    // Set up camera button
-    const cameraBtn = document.getElementById('cameraBtn');
-    if (cameraBtn) {
-        cameraBtn.addEventListener('click', function() {
-            toggleCamera();
-        });
-    }
+    // Camera button removed - facial detection is always-on now
     
     // Set up close sidebar button
     const closeSidebarBtn = document.getElementById('closeSidebarBtn');
@@ -201,20 +314,13 @@ function initializeCompanionUI() {
         });
     }
     
-    // Set up camera buttons
-    const startCameraBtn = document.getElementById('startCameraBtn');
-    if (startCameraBtn) {
-        startCameraBtn.addEventListener('click', function() {
-            startFacialDetection();
-        });
-    }
-    
-    const stopCameraBtn = document.getElementById('stopCameraBtn');
-    if (stopCameraBtn) {
-        stopCameraBtn.addEventListener('click', function() {
-            stopFacialDetection();
-        });
-    }
+        // Set up corner camera toggle
+        const cornerCameraToggle = document.getElementById('cornerCameraToggle');
+        if (cornerCameraToggle) {
+            cornerCameraToggle.addEventListener('click', function() {
+                toggleCornerCamera();
+            });
+        }
 
     // Update avatar based on emotion
     updateCompanionAvatar('neutral');
@@ -230,35 +336,22 @@ function setupInputHandlers() {
     // Additional setup if needed
 }
 
-// Removed initializeSignalR from companion-ui.js - app.js handles SignalR initialization
-// This function is kept for backward compatibility but does nothing
-function initializeSignalR() {
-    // SignalR is initialized by app.js, not here
-    // Just set up handlers if connection exists
-    if (window.connection) {
-        setupSignalRHandlers();
-    }
-}
+// DO NOT define initializeSignalR here - it's defined in app.js
+// If we define it here, it will overwrite the one in app.js!
+// Just use setupSignalRHandlers() when connection is ready
 
 function setupSignalRHandlers() {
     if (!window.connection) return;
 
     const connection = window.connection;
 
-    // Only set up handlers if not already set up
+    // NOTE: We don't set up duplicate SignalR handlers here because app.js already handles them.
+    // Setting up handlers here would cause duplicate messages.
+    // The SignalR events are already handled in app.js, which calls the display functions.
+    // We only need to ensure our display functions are available globally (which they are).
+    
+    // Only set up handlers that app.js doesn't handle
     if (!connection._companionUIHandlersSet) {
-        connection.on("EmotionDetected", (result) => {
-            displayEmotionResult(result);
-        });
-
-        connection.on("AdaptiveResponse", (response) => {
-            displayAdaptiveResponse(response);
-        });
-
-        connection.on("MultiLayerEmotionDetected", (result) => {
-            displayMultiLayerResult(result);
-        });
-
         connection.on("EthicalConsentUpdated", (consent) => {
             console.log('Consent updated:', consent);
         });
@@ -288,20 +381,29 @@ function sendMessage() {
     document.getElementById('quickEmotions')?.style.setProperty('display', 'none');
 
     // Send to backend
-    if (typeof detectEmotion === 'function') {
+    // Use global detectEmotion from app.js - it handles both API response and SignalR events
+    // This prevents duplicate messages
+    if (typeof window.detectEmotion === 'function') {
+        window.detectEmotion(text);
+    } else if (typeof detectEmotion === 'function') {
         detectEmotion(text);
     } else {
-        // Fallback: direct API call
-        fetch(`${API_BASE_URL}/api/emotion/detect`, {
+        // Fallback: direct API call (should not be reached if app.js loads correctly)
+        console.warn('detectEmotion not available, using fallback API call');
+        const apiBaseUrl = window.API_BASE_URL || API_BASE_URL || window.location.origin;
+        fetch(`${apiBaseUrl}/api/emotion/detect`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, userId: currentUserId })
         })
         .then(res => res.json())
         .then(data => {
-            displayEmotionResult(data);
-            if (data.response) {
-                displayAdaptiveResponse(data.response);
+            // Only display if not already displayed by SignalR
+            if (data.emotion) {
+                displayEmotionResult(data.emotion);
+            }
+            if (data.adaptiveResponse) {
+                displayAdaptiveResponse(data.adaptiveResponse);
             }
         })
         .catch(err => console.error('Error:', err));
@@ -377,10 +479,56 @@ function addChatMessage(text, type) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function displayEmotionResult(result) {
-    if (!result || !result.emotion) return;
+// Helper function to convert emotion (number or string) to lowercase string
+function getEmotionString(emotion) {
+    if (emotion === null || emotion === undefined) {
+        return 'neutral';
+    }
+    
+    // If it's already a string, return lowercase
+    if (typeof emotion === 'string') {
+        return emotion.toLowerCase();
+    }
+    
+    // If it's a number (enum), map it to string
+    if (typeof emotion === 'number') {
+        const emotionMap = {
+            0: 'happy',
+            1: 'sad',
+            2: 'angry',
+            3: 'anxious',
+            4: 'calm',
+            5: 'excited',
+            6: 'frustrated',
+            7: 'neutral'
+        };
+        return emotionMap[emotion] || 'neutral';
+    }
+    
+    // Fallback
+    return 'neutral';
+}
 
-    const emotion = result.emotion.toLowerCase();
+// Track last displayed emotion result to prevent duplicates
+let _lastEmotionResult = null;
+let _lastEmotionTime = 0;
+
+function displayEmotionResult(result) {
+    if (!result || result.emotion === undefined) return;
+
+    // Deduplication: Don't display the same emotion result within 2 seconds
+    const now = Date.now();
+    const resultKey = `${result.emotion}_${result.originalText || ''}_${Math.round(result.confidence * 100)}`;
+    
+    if (_lastEmotionResult === resultKey && (now - _lastEmotionTime) < 2000) {
+        console.log('Skipping duplicate emotion result:', result.emotion);
+        return;
+    }
+    
+    _lastEmotionResult = resultKey;
+    _lastEmotionTime = now;
+
+    const emotion = getEmotionString(result.emotion);
     updateCompanionAvatar(emotion);
     
     // Update body background based on emotion
@@ -393,15 +541,45 @@ function displayEmotionResult(result) {
     }
 }
 
+// Track last displayed messages to prevent duplicates (use a Set to track multiple recent messages)
+let _recentMessages = new Set();
+let _messageTimestamps = new Map();
+
 function displayAdaptiveResponse(response) {
     if (!response || !response.message) return;
+
+    // Deduplication: Don't display the same message within 3 seconds
+    const now = Date.now();
+    const messageKey = response.message; // Use just the message text as key
+    
+    // Check if this exact message was displayed recently
+    if (_recentMessages.has(messageKey)) {
+        const lastTime = _messageTimestamps.get(messageKey);
+        if (lastTime && (now - lastTime) < 3000) {
+            console.log('Skipping duplicate adaptive response:', response.message);
+            return;
+        }
+    }
+    
+    // Clean up old messages (older than 5 seconds)
+    _messageTimestamps.forEach((time, msg) => {
+        if (now - time > 5000) {
+            _recentMessages.delete(msg);
+            _messageTimestamps.delete(msg);
+        }
+    });
+    
+    // Track this message
+    _recentMessages.add(messageKey);
+    _messageTimestamps.set(messageKey, now);
 
     // Add AI response to chat
     addChatMessage(response.message, 'ai');
 
     // Update avatar if emotion changed
-    if (response.emotion) {
-        updateCompanionAvatar(response.emotion.toLowerCase());
+    if (response.emotion !== undefined) {
+        const emotion = getEmotionString(response.emotion);
+        updateCompanionAvatar(emotion);
     }
 
     // Speak if TTS is enabled
@@ -479,8 +657,285 @@ function closeSidebar() {
     if (overlay) overlay.style.display = 'none';
 }
 
-// Camera management
+// Always-on Corner Camera Management
+let cornerCameraActive = false;
+let cornerVideoStream = null;
+
+async function startCornerCamera() {
+    if (cornerCameraActive) return;
+    
+    const cornerVideo = document.getElementById('cornerVideoElement');
+    const cornerCanvas = document.getElementById('cornerCanvasElement');
+    const cornerEmotionBadge = document.getElementById('cornerEmotionBadge');
+    const cornerEmotionConfidence = document.getElementById('cornerEmotionConfidence');
+    
+    if (!cornerVideo) {
+        console.warn('Corner camera elements not found');
+        return;
+    }
+    
+    try {
+        // Request camera access
+        cornerVideoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                width: 200, 
+                height: 150,
+                facingMode: 'user' 
+            } 
+        });
+        
+        cornerVideo.srcObject = cornerVideoStream;
+        cornerCameraActive = true;
+        
+        // Wait for video to be ready before starting detection
+        await new Promise((resolve) => {
+            const onReady = () => {
+                if (cornerVideo.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+                    cornerVideo.removeEventListener('loadedmetadata', onReady);
+                    cornerVideo.removeEventListener('canplay', onReady);
+                    resolve();
+                }
+            };
+            
+            cornerVideo.addEventListener('loadedmetadata', onReady);
+            cornerVideo.addEventListener('canplay', onReady);
+            
+            // Check if already ready
+            if (cornerVideo.readyState >= 2) {
+                cornerVideo.removeEventListener('loadedmetadata', onReady);
+                cornerVideo.removeEventListener('canplay', onReady);
+                resolve();
+            }
+        });
+        
+        // Start facial detection for corner camera (uses its own detection loop)
+        startCornerFacialDetection(cornerVideo, cornerCanvas, cornerEmotionBadge, cornerEmotionConfidence);
+        
+        console.log('✅ Corner camera started - always-on facial detection active');
+        console.log('Video readyState:', cornerVideo.readyState, 'videoWidth:', cornerVideo.videoWidth, 'videoHeight:', cornerVideo.videoHeight);
+    } catch (error) {
+        console.error('Error starting corner camera:', error);
+        console.error('Error details:', error.message, error.stack);
+        if (cornerEmotionBadge) {
+            cornerEmotionBadge.textContent = 'Camera Error';
+        }
+        if (cornerEmotionConfidence) {
+            cornerEmotionConfidence.textContent = error.message || 'Check permissions';
+        }
+    }
+}
+
+// Corner camera toggle
+function toggleCornerCamera() {
+    const cornerCamera = document.getElementById('cornerCamera');
+    if (cornerCamera) {
+        cornerCamera.classList.toggle('collapsed');
+    }
+}
+
+// Start facial detection for corner camera (simplified version)
+async function startCornerFacialDetection(video, canvas, badge, confidence) {
+    // Check if face-api is loaded
+    if (typeof faceapi === 'undefined') {
+        console.warn('face-api.js not loaded');
+        return;
+    }
+    
+    // Load models if needed (check if already loaded from facial-detection.js)
+    if (!window.faceApiModelsLoaded) {
+        try {
+            console.log('Loading face-api models for corner camera...');
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'),
+                faceapi.nets.faceLandmark68Net.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'),
+                faceapi.nets.faceExpressionNet.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights')
+            ]);
+            window.faceApiModelsLoaded = true;
+            console.log('✅ Face-api models loaded for corner camera');
+        } catch (error) {
+            console.error('Error loading face-api models:', error);
+            if (badge) badge.textContent = 'Model Error';
+            if (confidence) confidence.textContent = 'Check internet';
+            return;
+        }
+    } else {
+        console.log('Face-api models already loaded, reusing...');
+    }
+    
+    // Wait for video dimensions to be available
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+        await new Promise((resolve) => {
+            const onLoadedMetadata = () => {
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                resolve();
+            };
+            video.addEventListener('loadedmetadata', onLoadedMetadata);
+            // If already loaded, resolve immediately
+            if (video.readyState >= 1) {
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                resolve();
+            }
+        });
+    }
+    
+    // Set canvas size
+    canvas.width = video.videoWidth || 200;
+    canvas.height = video.videoHeight || 150;
+    
+    // Detection loop
+    const detectLoop = async () => {
+        if (!cornerCameraActive) return;
+        
+        // Check if video is ready (has enough data for detection)
+        if (!video || video.readyState < 2) {
+            // Video not ready yet, wait a bit and try again
+            if (cornerCameraActive) {
+                setTimeout(detectLoop, 200);
+            }
+            return;
+        }
+        
+        try {
+            const detections = await faceapi
+                .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceExpressions();
+            
+            if (detections.length > 0) {
+                const detection = detections[0];
+                const expressions = detection.expressions;
+                
+                let maxExpression = null;
+                let maxConfidence = 0;
+                
+                for (const [expression, conf] of Object.entries(expressions)) {
+                    if (conf > maxConfidence) {
+                        maxConfidence = conf;
+                        maxExpression = expression;
+                    }
+                }
+                
+                // Map to emotion
+                const emotionMap = {
+                    'happy': 'Happy',
+                    'sad': 'Sad',
+                    'angry': 'Angry',
+                    'fearful': 'Anxious',
+                    'disgusted': 'Frustrated',
+                    'surprised': 'Excited',
+                    'neutral': 'Neutral'
+                };
+                
+                const emotion = emotionMap[maxExpression] || 'Neutral';
+                
+                if (badge) badge.textContent = emotion;
+                if (confidence) confidence.textContent = `${Math.round(maxConfidence * 100)}%`;
+                
+                // Send to server for processing (only if confidence is high enough)
+                // Higher threshold to avoid false positives
+                if (maxConfidence > 0.7) {
+                    sendCornerEmotionToServer(emotion.toLowerCase(), maxConfidence);
+                }
+            } else {
+                if (badge) badge.textContent = 'No Face';
+                if (confidence) confidence.textContent = '--';
+            }
+        } catch (error) {
+            console.error('Error in corner facial detection:', error);
+            // Don't stop the loop on error, just log it
+            if (badge) badge.textContent = 'Error';
+            if (confidence) confidence.textContent = 'Retrying...';
+        }
+        
+        // Continue loop
+        if (cornerCameraActive) {
+            setTimeout(detectLoop, 500); // Detect every 500ms
+        }
+    };
+    
+    detectLoop();
+}
+
+// Track last emotion sent to avoid spam
+let lastCornerEmotionSent = null;
+let lastCornerEmotionTime = 0;
+
+async function sendCornerEmotionToServer(emotion, confidence) {
+    const now = Date.now();
+    
+    // Smart throttling: 
+    // - Same emotion: only send every 5 seconds (reduced frequency)
+    // - Different emotion: send immediately (emotional change detected)
+    // - Negative emotions: send more frequently (every 4 seconds)
+    // - Neutral: send less frequently (every 8 seconds) to avoid spam
+    const negativeEmotions = ['sad', 'anxious', 'angry', 'frustrated'];
+    const isNegative = negativeEmotions.includes(emotion);
+    const isNeutral = emotion === 'neutral';
+    const isEmotionChange = lastCornerEmotionSent !== emotion;
+    
+    let throttleTime = 5000; // Default: 5 seconds
+    if (isNeutral) {
+        throttleTime = 8000; // Neutral: 8 seconds (less frequent)
+    } else if (isNegative) {
+        throttleTime = 4000; // Negative emotions: 4 seconds (more responsive)
+    }
+    if (isEmotionChange) {
+        throttleTime = 2000; // Emotion change: 2 seconds (immediate response)
+    }
+    
+    // Check if we should send
+    if (!isEmotionChange && (now - lastCornerEmotionTime) < throttleTime) {
+        return; // Same emotion, too soon
+    }
+    
+    lastCornerEmotionSent = emotion;
+    lastCornerEmotionTime = now;
+    
+    try {
+        const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
+        const apiBaseUrl = window.API_BASE_URL || window.location.origin;
+        
+        const response = await fetch(`${apiBaseUrl}/api/emotion/facial`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emotion: emotion,
+                confidence: confidence,
+                userId: userId,
+                source: 'corner_camera',
+                realTime: true
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            
+            // Display adaptive response if available
+            if (data.adaptiveResponse && typeof displayAdaptiveResponse === 'function') {
+                displayAdaptiveResponse(data.adaptiveResponse);
+            }
+        }
+    } catch (error) {
+        console.error('Error sending corner emotion to server:', error);
+    }
+}
+
+// Stop corner camera
+function stopCornerCamera() {
+    cornerCameraActive = false;
+    if (cornerVideoStream) {
+        cornerVideoStream.getTracks().forEach(track => track.stop());
+        cornerVideoStream = null;
+    }
+    const cornerVideo = document.getElementById('cornerVideoElement');
+    if (cornerVideo) {
+        cornerVideo.srcObject = null;
+    }
+}
+
+// Camera management (old overlay - kept for compatibility but not used)
 function toggleCamera() {
+    // Old camera overlay - not used anymore, but keep for compatibility
     const cameraOverlay = document.getElementById('cameraOverlay');
     const overlay = document.getElementById('overlay');
     
@@ -504,22 +959,9 @@ function autoResizeTextarea(textarea) {
     textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
 
-// Voice recording (reuse from app.js if available)
-function toggleRecording() {
-    // Use the function from app.js if available
-    if (typeof window.toggleRecording === 'function') {
-        window.toggleRecording();
-        return;
-    }
-
-    // Fallback: use local implementation
-    const isRecording = companionMediaRecorder?.state === 'recording';
-    if (!isRecording) {
-        startRecording();
-    } else {
-        stopRecording();
-    }
-}
+// Voice recording - use real function from app.js directly
+// Don't create a wrapper - just use the real function directly
+// This prevents recursion issues
 
 function startRecording() {
     // Implementation from app.js
@@ -585,59 +1027,138 @@ function toggleConsent(type) {
 }
 
 // TTS toggle (reuse from app.js)
+// Use lazy loading to get real function when needed
 function toggleTTS() {
-    const externalToggleTTS = window.toggleTTS;
-    if (typeof externalToggleTTS === 'function' && externalToggleTTS !== toggleTTS) {
-        externalToggleTTS();
+    // Prevent recursion
+    if (_callingToggleTTS) {
+        console.warn('toggleTTS: Recursion detected, aborting');
         return;
     }
-    // Fallback: do nothing if external function doesn't exist
-    console.log('toggleTTS: No external function found');
+    
+    // Get real function from window (lazy loading)
+    const realFunction = getRealToggleTTS();
+    
+    // Check if we got our own wrapper (shouldn't happen, but be safe)
+    if (realFunction === toggleTTS) {
+        console.warn('toggleTTS: Got our own wrapper, this should not happen');
+        return;
+    }
+    
+    if (realFunction) {
+        _callingToggleTTS = true;
+        try {
+            realFunction();
+        } finally {
+            _callingToggleTTS = false;
+        }
+    } else {
+        console.warn('toggleTTS: app.js function not available. Make sure app.js is loaded.');
+    }
 }
 
 // Facial detection (reuse from facial-detection.js)
+// Use lazy loading to get real function when needed
 function startFacialDetection() {
-    // Check if facial-detection.js has loaded and exposed the function
-    const externalStartFacial = window.startFacialDetection;
-    
-    // If window.startFacialDetection exists and is different from this function, use it
-    if (externalStartFacial && typeof externalStartFacial === 'function' && externalStartFacial !== startFacialDetection) {
-        externalStartFacial();
-        document.getElementById('startCameraBtn')?.style.setProperty('display', 'none');
-        document.getElementById('stopCameraBtn')?.style.setProperty('display', 'block');
-        document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'block');
+    // Prevent recursion
+    if (_callingStartFacialDetection) {
+        console.warn('startFacialDetection: Recursion detected, aborting');
         return;
     }
     
-    // If we reach here, either the function doesn't exist or it's this function itself
-    // Wait a bit for facial-detection.js to load
-    if (typeof window.startFacialDetection === 'undefined' || window.startFacialDetection === startFacialDetection) {
-        console.log('startFacialDetection: Waiting for facial-detection.js to load...');
-        setTimeout(() => {
-            const loadedFunction = window.startFacialDetection;
-            if (loadedFunction && typeof loadedFunction === 'function' && loadedFunction !== startFacialDetection) {
-                loadedFunction();
+    // Get real function from window (lazy loading)
+    const realFunction = getRealStartFacialDetection();
+    
+    // Check if we got our own wrapper (shouldn't happen, but be safe)
+    if (realFunction === startFacialDetection) {
+        console.warn('startFacialDetection: Got our own wrapper, this should not happen');
+        console.warn('startFacialDetection: window.startFacialDetection =', window.startFacialDetection);
+        console.warn('startFacialDetection: _storedRealStartFacialDetection =', _storedRealStartFacialDetection);
+        // Try to get it directly from window one more time
+        const directRef = window.startFacialDetection;
+        if (directRef && typeof directRef === 'function' && directRef !== startFacialDetection) {
+            console.log('startFacialDetection: Found real function on retry');
+            _storedRealStartFacialDetection = directRef;
+            _callingStartFacialDetection = true;
+            try {
+                directRef();
                 document.getElementById('startCameraBtn')?.style.setProperty('display', 'none');
                 document.getElementById('stopCameraBtn')?.style.setProperty('display', 'block');
                 document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'block');
-            } else {
-                console.warn('startFacialDetection: facial-detection.js function not available');
+            } catch (error) {
+                console.error('Error calling startFacialDetection on retry:', error);
+            } finally {
+                _callingStartFacialDetection = false;
             }
-        }, 1000);
+            return;
+        }
+        return;
+    }
+    
+    if (realFunction) {
+        _callingStartFacialDetection = true;
+        try {
+            realFunction();
+            // Update UI elements
+            document.getElementById('startCameraBtn')?.style.setProperty('display', 'none');
+            document.getElementById('stopCameraBtn')?.style.setProperty('display', 'block');
+            document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'block');
+        } catch (error) {
+            console.error('Error calling startFacialDetection:', error);
+        } finally {
+            _callingStartFacialDetection = false;
+        }
+    } else {
+        console.warn('startFacialDetection: facial-detection.js function not available. Make sure facial-detection.js is loaded and has exposed startFacialDetection to window.');
+        // Try to wait a bit and retry (in case script is still loading)
+        setTimeout(() => {
+            const retryFunction = getRealStartFacialDetection();
+            if (retryFunction && retryFunction !== startFacialDetection) {
+                console.log('startFacialDetection: Found function after retry, calling it');
+                _callingStartFacialDetection = true;
+                try {
+                    retryFunction();
+                    document.getElementById('startCameraBtn')?.style.setProperty('display', 'none');
+                    document.getElementById('stopCameraBtn')?.style.setProperty('display', 'block');
+                    document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'block');
+                } catch (error) {
+                    console.error('Error calling startFacialDetection on retry:', error);
+                } finally {
+                    _callingStartFacialDetection = false;
+                }
+            }
+        }, 500);
     }
 }
 
 function stopFacialDetection() {
-    const externalStopFacial = window.stopFacialDetection;
-    if (typeof externalStopFacial === 'function' && externalStopFacial !== stopFacialDetection) {
-        externalStopFacial();
-        document.getElementById('startCameraBtn')?.style.setProperty('display', 'block');
-        document.getElementById('stopCameraBtn')?.style.setProperty('display', 'none');
-        document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'none');
+    // Prevent recursion
+    if (_callingStopFacialDetection) {
+        console.warn('stopFacialDetection: Recursion detected, aborting');
         return;
     }
-    // Fallback: do nothing if external function doesn't exist
-    console.log('stopFacialDetection: No external function found');
+    
+    // Get real function from window (lazy loading)
+    const realFunction = getRealStopFacialDetection();
+    
+    // Check if we got our own wrapper (shouldn't happen, but be safe)
+    if (realFunction === stopFacialDetection) {
+        console.warn('stopFacialDetection: Got our own wrapper, this should not happen');
+        return;
+    }
+    
+    if (realFunction) {
+        _callingStopFacialDetection = true;
+        try {
+            realFunction();
+            document.getElementById('startCameraBtn')?.style.setProperty('display', 'block');
+            document.getElementById('stopCameraBtn')?.style.setProperty('display', 'none');
+            document.getElementById('facialEmotionDisplay')?.style.setProperty('display', 'none');
+        } finally {
+            _callingStopFacialDetection = false;
+        }
+    } else {
+        console.warn('stopFacialDetection: facial-detection.js function not available. Make sure facial-detection.js is loaded.');
+    }
 }
 
 // Voice notes (reuse from app.js)
@@ -671,8 +1192,8 @@ function loadClonedVoices() {
         return;
     }
     
-    // Fallback: do nothing if function doesn't exist
-    console.log('loadClonedVoices: No external function found');
+    // Fallback: do nothing if function doesn't exist (voice cloning is optional)
+    // Silently skip - this is expected if voice cloning isn't implemented
 }
 
 function initMultiLayerEmotion() {
@@ -683,8 +1204,8 @@ function initMultiLayerEmotion() {
         return;
     }
     
-    // Fallback: do nothing if function doesn't exist
-    console.log('initMultiLayerEmotion: No external function found');
+    // Fallback: do nothing if function doesn't exist (multi-layer emotion is optional)
+    // Silently skip - this is expected if multi-layer emotion isn't implemented
 }
 
 // Helper function to display voice notes
@@ -707,6 +1228,7 @@ function displayVoiceNotes(voiceNotes) {
 }
 
 // Expose functions globally
+// Expose functions globally (for other scripts or direct console access)
 window.sendMessage = sendMessage;
 window.quickEmotion = quickEmotion;
 window.toggleSettings = toggleSettings;
@@ -715,3 +1237,25 @@ window.toggleCamera = toggleCamera;
 window.handleInputKeydown = handleInputKeydown;
 window.autoResizeTextarea = autoResizeTextarea;
 window.updateCompanionAvatar = updateCompanionAvatar;
+window.updateCompanionAvatarSpeaking = updateCompanionAvatarSpeaking;
+// DO NOT expose toggleRecording to window - it causes recursion
+// The real function from app.js is already exposed
+// window.toggleRecording = toggleRecording; // DO NOT EXPOSE - causes recursion
+// NOTE: We do NOT expose startFacialDetection, stopFacialDetection, or toggleTTS to window
+// because they are wrappers that call the real functions from other scripts.
+// The real functions are already exposed by their respective scripts.
+// If we expose our wrappers, they might overwrite the real functions and cause recursion.
+// window.startFacialDetection = startFacialDetection; // DO NOT EXPOSE - causes recursion
+// window.stopFacialDetection = stopFacialDetection; // DO NOT EXPOSE - causes recursion
+// window.toggleTTS = toggleTTS; // DO NOT EXPOSE - causes recursion
+window.handleVoiceCloneFile = handleVoiceCloneFile; // Exposed for app.js to use
+window.toggleConsent = toggleConsent; // Exposed for app.js to use
+window.loadVoiceNotes = loadVoiceNotes; // Exposed for app.js to use
+window.loadClonedVoices = loadClonedVoices; // Exposed for app.js to use
+window.initMultiLayerEmotion = initMultiLayerEmotion; // Exposed for app.js to use
+window.startCornerCamera = startCornerCamera;
+window.toggleCornerCamera = toggleCornerCamera;
+window.stopCornerCamera = stopCornerCamera;
+window.startCornerCamera = startCornerCamera;
+window.toggleCornerCamera = toggleCornerCamera;
+window.stopCornerCamera = stopCornerCamera;

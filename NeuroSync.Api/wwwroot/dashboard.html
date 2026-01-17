@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human OS - Emotional Control Center</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-left">
+                <h1>🧠 Human OS</h1>
+                <p class="subtitle">Emotional Control Center</p>
+            </div>
+            <div class="header-right">
+                <a href="/" class="header-link" style="text-decoration: none; color: #fff; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 12px; display: inline-flex; align-items: center; gap: 6px;">
+                    💬 Chat
+                </a>
+                <div class="user-info">
+                    <span id="userId">User: default</span>
+                </div>
+                <div class="status-indicator">
+                    <span id="connectionStatus" class="status-dot offline"></span>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content -->
+        <main class="dashboard-main">
+            <!-- Top Row: Emotional State & Stress Monitor -->
+            <section class="dashboard-row">
+                <div class="widget emotional-state-widget">
+                    <h3>🎭 Current Emotional State</h3>
+                    <div class="emotion-display">
+                        <div id="currentEmotion" class="emotion-badge neutral">Neutral</div>
+                        <div id="emotionConfidence" class="confidence">--</div>
+                    </div>
+                    <div class="emotion-trend">
+                        <span id="emotionalTrend">Stable</span>
+                        <span id="trendIndicator" class="trend-indicator">→</span>
+                    </div>
+                </div>
+
+                <div class="widget stress-monitor-widget">
+                    <h3>⚡ Stress Monitor</h3>
+                    <div class="stress-display">
+                        <div class="stress-bar">
+                            <div id="stressBar" class="stress-fill" style="width: 50%"></div>
+                        </div>
+                        <div id="stressLevel" class="stress-value">50%</div>
+                    </div>
+                    <div class="energy-display">
+                        <span>🔋 Energy: </span>
+                        <span id="energyLevel">50%</span>
+                    </div>
+                </div>
+
+                <div class="widget mental-load-widget">
+                    <h3>🧠 Mental Load</h3>
+                    <div class="mental-load-display">
+                        <div class="load-bar">
+                            <div id="mentalLoadBar" class="load-fill" style="width: 50%"></div>
+                        </div>
+                        <div id="mentalLoadValue" class="load-value">50%</div>
+                    </div>
+                    <div id="overloadIndicators" class="overload-indicators"></div>
+                </div>
+            </section>
+
+            <!-- Life Domains Grid -->
+            <section class="dashboard-row">
+                <div class="widget domains-widget full-width">
+                    <h3>🎯 Life Domains</h3>
+                    <div class="domains-grid" id="domainsGrid">
+                        <div class="domain-card" data-domain="MentalHealth">
+                            <div class="domain-icon">🧠</div>
+                            <div class="domain-name">Mental</div>
+                            <div class="domain-score">--</div>
+                            <div class="domain-status">--</div>
+                        </div>
+                        <div class="domain-card" data-domain="Relationships">
+                            <div class="domain-icon">💚</div>
+                            <div class="domain-name">Relationships</div>
+                            <div class="domain-score">--</div>
+                            <div class="domain-status">--</div>
+                        </div>
+                        <div class="domain-card" data-domain="CareerWork">
+                            <div class="domain-icon">💼</div>
+                            <div class="domain-name">Career</div>
+                            <div class="domain-score">--</div>
+                            <div class="domain-status">--</div>
+                        </div>
+                        <div class="domain-card" data-domain="MoneySurvival">
+                            <div class="domain-icon">💰</div>
+                            <div class="domain-name">Money</div>
+                            <div class="domain-score">--</div>
+                            <div class="domain-status">--</div>
+                        </div>
+                        <div class="domain-card" data-domain="SelfGrowth">
+                            <div class="domain-icon">🌱</div>
+                            <div class="domain-name">Self</div>
+                            <div class="domain-score">--</div>
+                            <div class="domain-status">--</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Middle Row: Burnout Risk & Growth -->
+            <section class="dashboard-row">
+                <div class="widget burnout-widget">
+                    <h3>🛡️ Burnout Risk</h3>
+                    <div class="risk-display">
+                        <div id="burnoutRiskScore" class="risk-score">--</div>
+                        <div id="burnoutRiskLevel" class="risk-level">--</div>
+                    </div>
+                    <div id="burnoutContributingFactors" class="factors-list"></div>
+                </div>
+
+                <div class="widget growth-widget">
+                    <h3>📈 Emotional Growth</h3>
+                    <div class="growth-display">
+                        <div class="growth-metric">
+                            <span class="metric-label">Maturity:</span>
+                            <span id="maturityScore" class="metric-value">--</span>
+                        </div>
+                        <div class="growth-metric">
+                            <span class="metric-label">Resilience:</span>
+                            <span id="resilienceScore" class="metric-value">--</span>
+                        </div>
+                    </div>
+                    <div id="growthTrend" class="growth-trend">--</div>
+                </div>
+            </section>
+
+            <!-- Insights & Actions Row -->
+            <section class="dashboard-row">
+                <div class="widget insights-widget">
+                    <h3>💡 Key Insights</h3>
+                    <div id="keyInsights" class="insights-list">
+                        <p class="loading">Loading insights...</p>
+                    </div>
+                </div>
+
+                <div class="widget actions-widget">
+                    <h3>🎯 Recommended Actions</h3>
+                    <div id="recommendedActions" class="actions-list">
+                        <p class="loading">Loading actions...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Row: Recent Decisions & Life Story -->
+            <section class="dashboard-row">
+                <div class="widget decisions-widget">
+                    <h3>🤔 Recent Decisions</h3>
+                    <div id="recentDecisions" class="decisions-list">
+                        <p class="empty">No recent decisions</p>
+                    </div>
+                </div>
+
+                <div class="widget story-widget">
+                    <h3>📖 Your Life Story</h3>
+                    <div id="lifeStory" class="story-text">
+                        <p class="loading">Generating your story...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Refresh Button -->
+        <footer class="dashboard-footer">
+            <button id="refreshBtn" class="refresh-btn">🔄 Refresh Dashboard</button>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

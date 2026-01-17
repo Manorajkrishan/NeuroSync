@@ -17,11 +17,136 @@ public class EmotionalIntelligence
     /// <summary>
     /// Generates empathetic, human-like responses based on emotion and context.
     /// </summary>
-    public string GenerateEmpatheticMessage(EmotionType emotion, ConversationContext? context = null)
+    public string GenerateEmpatheticMessage(EmotionType emotion, ConversationContext? context = null, string? userMessage = null)
     {
+        // First, try to generate contextual response based on user's actual message
+        if (!string.IsNullOrWhiteSpace(userMessage))
+        {
+            var contextualMessage = GenerateContextualMessage(emotion, userMessage, context);
+            if (!string.IsNullOrEmpty(contextualMessage))
+            {
+                return contextualMessage;
+            }
+        }
+        
+        // Fallback to general empathetic messages
         var messages = GetEmpatheticMessages(emotion, context);
         var random = new Random();
         return messages[random.Next(messages.Count)];
+    }
+    
+    /// <summary>
+    /// Generates contextual response based on what user actually said.
+    /// </summary>
+    private string? GenerateContextualMessage(EmotionType emotion, string userMessage, ConversationContext? context)
+    {
+        var messageLower = userMessage.ToLower();
+        
+        // Academic/Exam situations
+        if (messageLower.Contains("exam") || messageLower.Contains("test") || messageLower.Contains("failed") || 
+            messageLower.Contains("miss") || messageLower.Contains("fail") || messageLower.Contains("grade"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "I'm so sorry to hear about your exam. That must be really disappointing and frustrating. What happened?",
+                EmotionType.Frustrated => "Failing an exam is really tough. I can hear how frustrated you are. Want to talk about what went wrong?",
+                EmotionType.Anxious => "I can sense you're worried about your exam. Let's talk through what happened and figure out next steps together.",
+                _ => "I hear you're dealing with exam stress. That's really hard. Tell me more about what happened?"
+            };
+        }
+        
+        // Work/Job situations
+        if (messageLower.Contains("work") || messageLower.Contains("job") || messageLower.Contains("boss") || 
+            messageLower.Contains("colleague") || messageLower.Contains("office"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "Work stress can be really overwhelming. I'm here to listen. What's been happening at work?",
+                EmotionType.Angry => "Work situations can be really frustrating. I hear you. What's been bothering you at work?",
+                EmotionType.Anxious => "Work anxiety is really tough. Let's talk about what's making you feel this way.",
+                _ => "I hear work is on your mind. What's been going on?"
+            };
+        }
+        
+        // Missing someone (MUST CHECK BEFORE relationship situations)
+        if (messageLower.Contains("miss") && (messageLower.Contains("mother") || messageLower.Contains("mom") || messageLower.Contains("father") || 
+            messageLower.Contains("dad") || messageLower.Contains("parent") || messageLower.Contains("family") || 
+            messageLower.Contains("friend") || messageLower.Contains("loved") || messageLower.Contains("someone")))
+        {
+            if (messageLower.Contains("mother") || messageLower.Contains("mom"))
+            {
+                return emotion switch
+                {
+                    EmotionType.Sad => "I'm so sorry you're missing your mother. That must be really hard. How long has it been?",
+                    _ => "Missing your mother is really tough. I'm here for you. Do you want to talk about her?"
+                };
+            }
+            if (messageLower.Contains("father") || messageLower.Contains("dad"))
+            {
+                return emotion switch
+                {
+                    EmotionType.Sad => "I'm so sorry you're missing your father. That must be really difficult. How are you coping?",
+                    _ => "Missing your father is really tough. I'm here to listen. Want to share some memories?"
+                };
+            }
+            return emotion switch
+            {
+                EmotionType.Sad => "I can hear how much you miss them. That pain is real, and it's okay to feel it. I'm here with you. Tell me about them?",
+                _ => "Missing someone you love is really hard. I'm here to listen. What are you missing most about them?"
+            };
+        }
+        
+        // Relationship situations
+        if (messageLower.Contains("friend") || messageLower.Contains("family") || messageLower.Contains("relationship") ||
+            messageLower.Contains("breakup") || messageLower.Contains("fight") || messageLower.Contains("argue"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "Relationships can be really hard. I'm here for you. What's been happening?",
+                EmotionType.Angry => "I can hear how upset you are about this relationship situation. Want to talk about what happened?",
+                _ => "I hear you're dealing with something in your relationships. I'm here to listen."
+            };
+        }
+        
+        // Help requests
+        if (messageLower.Contains("help") || messageLower.Contains("need") || messageLower.Contains("can you") ||
+            messageLower.Contains("can u") || messageLower.Contains("please"))
+        {
+            // Check recent conversation for context
+            if (context != null && context.History.Count > 0)
+            {
+                var lastMessage = context.History.Last().UserMessage?.ToLower() ?? "";
+                if (lastMessage.Contains("exam"))
+                {
+                    return "Of course I can help! You mentioned missing your exam - that's really tough. Let's talk about what happened and figure out what we can do next. What would be most helpful right now?";
+                }
+                if (lastMessage.Contains("not good") || lastMessage.Contains("sad") || lastMessage.Contains("bad"))
+                {
+                    return "Absolutely, I'm here to help. You mentioned you're not feeling good - I want to understand what's going on. What's been weighing on you?";
+                }
+            }
+            return "Of course I can help! I'm here for you. What do you need help with?";
+        }
+        
+        // Loneliness/needing someone
+        if (messageLower.Contains("alone") || messageLower.Contains("lonely") || messageLower.Contains("need someone") ||
+            messageLower.Contains("no one") || messageLower.Contains("talk"))
+        {
+            return "I hear you need someone to talk to. I'm here, and I'm listening. You're not alone in this. What's on your mind?";
+        }
+        
+        // Health/Physical
+        if (messageLower.Contains("sick") || messageLower.Contains("pain") || messageLower.Contains("hurt") ||
+            messageLower.Contains("tired") || messageLower.Contains("exhausted"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "I'm sorry you're not feeling well. That can be really hard. How are you feeling right now?",
+                _ => "I hear you're dealing with some physical discomfort. That's tough. How can I help?"
+            };
+        }
+        
+        return null; // No contextual match, use general messages
     }
 
     /// <summary>
@@ -41,7 +166,13 @@ public class EmotionalIntelligence
                     "Feeling sad is part of being human. I'm here to listen and support you through this.",
                     "It sounds like you're having a tough time. Would you like to talk about what's on your mind?",
                     "I understand this is hard for you. Remember, tough times don't last, but tough people do.",
-                    "Your feelings matter. Let's work through this together, one step at a time."
+                    "Your feelings matter. Let's work through this together, one step at a time.",
+                    "I hear you're not feeling good. I'm here to listen. What's going on?",
+                    "I can tell you're struggling. You're not alone in this. What's been weighing on you?",
+                    "I'm sorry you're going through this. I'm here for you. Want to talk about it?",
+                    "It sounds like you're having a really hard time. I'm here to support you. What's on your mind?",
+                    "I can feel that you're hurting. I'm here to listen and help however I can.",
+                    "You don't have to go through this alone. I'm here. What's been bothering you?"
                 });
                 
                 // Add context-aware messages
@@ -118,6 +249,28 @@ public class EmotionalIntelligence
                 });
                 break;
 
+            case EmotionType.Neutral:
+                // More varied and conversational responses for neutral state
+                messages.AddRange(new[]
+                {
+                    "I'm here whenever you need me. What's on your mind?",
+                    "I'm listening. Feel free to share what you're thinking about.",
+                    "I'm here for you. Is there anything you'd like to talk about?",
+                    "How can I help you today?",
+                    "What would you like to explore or discuss?",
+                    "I'm here to support you. What's going on in your world?",
+                    "Feel free to share anything that's on your mind.",
+                    "I'm ready to chat whenever you are. What's up?",
+                    "How's your day going?",
+                    "What's something you'd like to talk about?",
+                    "I'm here. What's on your mind today?",
+                    "Feel like sharing what you're thinking about?",
+                    "I'm listening. What would you like to discuss?",
+                    "How can I be helpful to you right now?",
+                    "What's something you'd like to explore together?"
+                });
+                break;
+                
             default:
                 messages.Add("I'm here with you. How are you feeling right now?");
                 break;
@@ -209,6 +362,64 @@ public class EmotionalIntelligence
         }
 
         return null;
+    }
+    
+    /// <summary>
+    /// Generates contextual follow-up questions based on what user actually said.
+    /// </summary>
+    private string? GenerateContextualQuestion(EmotionType emotion, string userMessage, ConversationContext? context)
+    {
+        var messageLower = userMessage.ToLower();
+        
+        // Academic/Exam situations
+        if (messageLower.Contains("exam") || messageLower.Contains("test") || messageLower.Contains("failed") || 
+            messageLower.Contains("miss") || messageLower.Contains("fail") || messageLower.Contains("grade"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "I'm really sorry about your exam. Can you tell me what happened? Was it a specific subject or topic that was difficult?",
+                EmotionType.Frustrated => "Failing an exam is really frustrating. What do you think went wrong? Was there something specific that was challenging?",
+                _ => "Tell me more about your exam. What subject was it, and what happened?"
+            };
+        }
+        
+        // Help requests - check context for what they need help with
+        if (messageLower.Contains("help") || messageLower.Contains("can you") || messageLower.Contains("can u"))
+        {
+            if (context != null && context.History.Count > 0)
+            {
+                var lastMessage = context.History.Last().UserMessage?.ToLower() ?? "";
+                if (lastMessage.Contains("exam"))
+                {
+                    return "I want to help you with your exam situation. What would be most helpful right now? Do you want to talk about what happened, or figure out what to do next?";
+                }
+                if (lastMessage.Contains("not good") || lastMessage.Contains("sad"))
+                {
+                    return "I'm here to help. What's been making you feel this way? Is there something specific that's been bothering you?";
+                }
+            }
+            return "Of course! What do you need help with? I'm here to support you.";
+        }
+        
+        // Loneliness/needing someone
+        if (messageLower.Contains("need someone") || messageLower.Contains("talk") || messageLower.Contains("lonely"))
+        {
+            return "I'm here to listen. What's on your mind? What would you like to talk about?";
+        }
+        
+        // Work situations
+        if (messageLower.Contains("work") || messageLower.Contains("job") || messageLower.Contains("boss"))
+        {
+            return "Work can be really stressful. What's been happening at work that's been bothering you?";
+        }
+        
+        // Relationship situations
+        if (messageLower.Contains("friend") || messageLower.Contains("family") || messageLower.Contains("relationship"))
+        {
+            return "Relationships can be complicated. What's been going on? Want to talk about it?";
+        }
+        
+        return null; // No contextual match, use general questions
     }
 
     /// <summary>

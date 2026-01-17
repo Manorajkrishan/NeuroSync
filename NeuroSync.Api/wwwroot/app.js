@@ -21,9 +21,12 @@ let connection = null;
 // Make connection available globally for companion-ui.js
 window.connection = null;
 
+// Expose initializeSignalR globally to prevent overwriting
+window.initializeSignalR = initializeSignalR;
+
 // Initialize SignalR connection
 function initializeSignalR() {
-    console.log('initializeSignalR() called');
+    console.log('initializeSignalR() called from app.js');
     
     // Check if SignalR is loaded
     if (typeof signalR === 'undefined') {
@@ -160,9 +163,13 @@ function initializeSignalR() {
             });
     } catch (error) {
         console.error('Error creating SignalR connection:', error);
-        updateConnectionStatus(false, 'Initialization failed');
+        console.error('Error stack:', error.stack);
+        updateConnectionStatus(false, 'Initialization failed: ' + error.message);
     }
 }
+
+// Expose function globally AFTER definition to prevent overwriting
+window.initializeSignalR = initializeSignalR;
 
 function updateConnectionStatus(connected, message = null) {
     const statusDot = document.querySelector('.status-dot');
@@ -268,36 +275,44 @@ async function detectEmotion(textParam = null) {
             displayActionResult(data.actionResult);
         }
 
-        // Display results (SignalR will also update via real-time events)
-        if (data.emotion) {
-            try {
-                displayEmotionResult(data.emotion);
-            } catch (error) {
-                console.error('Error displaying emotion result:', error);
-                // Fallback display - don't throw, just show basic info
-                const emotionType = document.getElementById('emotionType');
-                const emotionConfidence = document.getElementById('emotionConfidence');
-                const resultCard = document.getElementById('emotionResult');
-                if (emotionType) {
-                    emotionType.textContent = getEmotionName(data.emotion.emotion || data.emotion);
-                }
-                if (emotionConfidence && data.emotion.confidence !== undefined) {
-                    const confidencePercent = (data.emotion.confidence * 100).toFixed(1);
-                    emotionConfidence.textContent = `Confidence: ${confidencePercent}%`;
-                }
-                if (resultCard) {
-                    resultCard.style.display = 'block';
+            // Display results
+            // NOTE: SignalR will also send these events, so we only display from API response
+            // if SignalR hasn't already displayed them (deduplication is handled in display functions)
+            if (data.emotion) {
+                try {
+                    // Only display if displayEmotionResult function exists (from companion-ui.js)
+                    if (typeof displayEmotionResult === 'function') {
+                        displayEmotionResult(data.emotion);
+                    } else {
+                        // Fallback for old UI
+                        const emotionType = document.getElementById('emotionType');
+                        const emotionConfidence = document.getElementById('emotionConfidence');
+                        const resultCard = document.getElementById('emotionResult');
+                        if (emotionType) {
+                            emotionType.textContent = getEmotionName(data.emotion.emotion || data.emotion);
+                        }
+                        if (emotionConfidence && data.emotion.confidence !== undefined) {
+                            const confidencePercent = (data.emotion.confidence * 100).toFixed(1);
+                            emotionConfidence.textContent = `Confidence: ${confidencePercent}%`;
+                        }
+                        if (resultCard) {
+                            resultCard.style.display = 'block';
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error displaying emotion result:', error);
                 }
             }
-        }
-        if (data.adaptiveResponse) {
-            try {
-                displayAdaptiveResponse(data.adaptiveResponse);
-            } catch (error) {
-                console.error('Error displaying adaptive response:', error);
-                // Silent fail for display errors
+            if (data.adaptiveResponse) {
+                try {
+                    // Only display if displayAdaptiveResponse function exists (from companion-ui.js)
+                    if (typeof displayAdaptiveResponse === 'function') {
+                        displayAdaptiveResponse(data.adaptiveResponse);
+                    }
+                } catch (error) {
+                    console.error('Error displaying adaptive response:', error);
+                }
             }
-        }
         if (data.iotActions) {
             try {
                 displayIoTActions(data.iotActions);
@@ -608,51 +623,101 @@ function displayIoTAction(action) {
 }
 
 function displayIoTActions(actions) {
+    if (!actions || !Array.isArray(actions) || actions.length === 0) {
+        return;
+    }
+
     const actionsCard = document.getElementById('iotActions');
     const actionsList = document.getElementById('iotActionsList');
 
-    // Clear existing actions
-    actionsList.innerHTML = '';
-
-    // Add all actions
-    actions.forEach(action => {
-        const actionItem = document.createElement('div');
-        actionItem.className = 'iot-action-item';
+    // Check if old UI elements exist
+    if (actionsCard && actionsList) {
+        // Old UI - use existing elements
+        actionsList.innerHTML = '';
         
-        let paramsHtml = '';
-        if (action.parameters) {
-            const params = Object.entries(action.parameters);
-            if (action.actionType === 'playMusic') {
-                // Format music action nicely
-                paramsHtml = `
-                    <div class="music-action">
-                        <div><strong>Genre:</strong> ${action.parameters.genre || 'N/A'}</div>
-                        <div><strong>Playlist:</strong> ${action.parameters.playlist || 'N/A'}</div>
-                        <div><strong>Volume:</strong> ${action.parameters.volume || 'N/A'}%</div>
-                        ${action.parameters.suggestion ? `<div class="music-suggestion-text">${action.parameters.suggestion}</div>` : ''}
-                        ${action.parameters.playlistUrl ? `<div class="playlist-url"><a href="${action.parameters.playlistUrl}" target="_blank" class="play-button">▶️ Play on YouTube Music</a></div>` : ''}
-                    </div>
-                `;
-            } else {
-                paramsHtml = params.map(([key, value]) => 
-                    `<div><strong>${key}:</strong> ${value}</div>`
-                ).join('');
+        // Add all actions
+        actions.forEach(action => {
+            const actionItem = document.createElement('div');
+            actionItem.className = 'iot-action-item';
+            
+            let paramsHtml = '';
+            if (action.parameters) {
+                const params = Object.entries(action.parameters);
+                if (action.actionType === 'playMusic') {
+                    // Format music action nicely
+                    paramsHtml = `
+                        <div class="music-action">
+                            <div><strong>Genre:</strong> ${action.parameters.genre || 'N/A'}</div>
+                            <div><strong>Playlist:</strong> ${action.parameters.playlist || 'N/A'}</div>
+                            <div><strong>Volume:</strong> ${action.parameters.volume || 'N/A'}%</div>
+                            ${action.parameters.suggestion ? `<div class="music-suggestion-text">${action.parameters.suggestion}</div>` : ''}
+                            ${action.parameters.playlistUrl ? `<div class="playlist-url"><a href="${action.parameters.playlistUrl}" target="_blank" class="play-button">▶️ Play on YouTube Music</a></div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    paramsHtml = params.map(([key, value]) => 
+                        `<div><strong>${key}:</strong> ${value}</div>`
+                    ).join('');
+                }
             }
-        }
 
-        const deviceIcon = action.deviceId === 'speaker' ? '🔊' : 
-                           action.deviceId.startsWith('light') ? '💡' : 
-                           action.deviceId === 'notification' ? '🔔' : '📱';
+            const deviceIcon = action.deviceId === 'speaker' ? '🔊' : 
+                               action.deviceId.startsWith('light') ? '💡' : 
+                               action.deviceId === 'notification' ? '🔔' : '📱';
 
-        actionItem.innerHTML = `
-            <h4>${deviceIcon} ${action.deviceId} - ${action.actionType}</h4>
-            ${paramsHtml || '<p>No parameters</p>'}
-        `;
+            actionItem.innerHTML = `
+                <h4>${deviceIcon} ${action.deviceId} - ${action.actionType}</h4>
+                ${paramsHtml || '<p>No parameters</p>'}
+            `;
 
-        actionsList.appendChild(actionItem);
-    });
+            actionsList.appendChild(actionItem);
+        });
 
-    actionsCard.style.display = 'block';
+        actionsCard.style.display = 'block';
+    } else {
+        // New UI - display IoT actions as chat messages
+        actions.forEach(action => {
+            const deviceIcon = action.deviceId === 'speaker' ? '🔊' : 
+                               action.deviceId.startsWith('light') ? '💡' : 
+                               action.deviceId === 'notification' ? '🔔' : '📱';
+            
+            let message = `${deviceIcon} ${action.deviceId}: ${action.actionType}`;
+            
+            if (action.parameters) {
+                if (action.actionType === 'playMusic') {
+                    message += ` - ${action.parameters.genre || 'Music'}`;
+                    if (action.parameters.playlist) {
+                        message += ` (${action.parameters.playlist})`;
+                    }
+                    if (action.parameters.playlistUrl) {
+                        message += ` - [Play on YouTube Music](${action.parameters.playlistUrl})`;
+                    }
+                } else if (action.actionType === 'setColor') {
+                    if (action.parameters.color) {
+                        message += ` - Color: ${action.parameters.color}`;
+                    }
+                    if (action.parameters.brightness !== undefined) {
+                        message += `, Brightness: ${action.parameters.brightness}%`;
+                    }
+                } else {
+                    // Generic parameters
+                    const paramStrings = Object.entries(action.parameters)
+                        .map(([key, value]) => `${key}: ${value}`)
+                        .join(', ');
+                    if (paramStrings) {
+                        message += ` (${paramStrings})`;
+                    }
+                }
+            }
+            
+            // Use addChatMessage if available (from companion-ui.js), otherwise just log
+            if (typeof addChatMessage === 'function') {
+                addChatMessage(message, 'ai');
+            } else {
+                console.log('IoT Action:', message);
+            }
+        });
+    }
 }
 
 // Voice recording functionality
@@ -926,6 +991,11 @@ if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('DOMContentLoaded', function() {
         console.log('DOM loaded, checking SignalR availability...');
         
+        // Initialize TTS
+        if (typeof initTTS === 'function') {
+            initTTS();
+        }
+        
         // Wait a bit for SignalR library to load
         setTimeout(() => {
             if (typeof signalR === 'undefined') {
@@ -949,4 +1019,14 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         }, 100);
     });
 }
+
+// Initialize TTS immediately when script loads (for browser compatibility)
+if (typeof initTTS === 'function') {
+    initTTS();
+}
+
+// Expose functions globally for TTS
+window.speakText = speakText;
+window.isTTSEnabled = isTTSEnabled;
+window.initTTS = initTTS;
 

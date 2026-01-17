@@ -45,7 +45,8 @@ public class DecisionEngine
         string message;
         if (_emotionalIntelligence != null)
         {
-            message = _emotionalIntelligence.GenerateEmpatheticMessage(emotionResult.Emotion, context);
+            // Pass userMessage to generate contextual responses
+            message = _emotionalIntelligence.GenerateEmpatheticMessage(emotionResult.Emotion, context, userMessage);
         }
         else
         {

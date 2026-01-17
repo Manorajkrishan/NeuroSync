@@ -29,8 +29,10 @@
                 </div>
             </div>
             <div class="header-actions">
+                <a href="/dashboard.html" class="icon-btn dashboard-btn" title="Open Human OS Dashboard" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px;">
+                    🧠 Dashboard
+                </a>
                 <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
-                <button class="icon-btn" id="cameraBtn" title="Camera">📷</button>
             </div>
         </div>
 
@@ -142,12 +144,28 @@
 
         <!-- Overlay (for sidebar/camera) -->
         <div id="overlay" class="overlay" style="display: none;"></div>
+
+        <!-- Always-on Corner Camera Widget -->
+        <div id="cornerCamera" class="corner-camera">
+            <div class="corner-camera-header">
+                <span class="corner-camera-title">📷 Live Emotion</span>
+                <button class="corner-camera-toggle" id="cornerCameraToggle" title="Toggle Camera">👁️</button>
+            </div>
+            <div class="corner-camera-content">
+                <video id="cornerVideoElement" autoplay playsinline muted></video>
+                <canvas id="cornerCanvasElement" style="display: none;"></canvas>
+                <div id="cornerEmotionDisplay" class="corner-emotion-display">
+                    <div class="corner-emotion-badge" id="cornerEmotionBadge">Neutral</div>
+                    <div class="corner-emotion-confidence" id="cornerEmotionConfidence">--</div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="app.js?v=3.7"></script>
+    <!-- Scripts - ORDER MATTERS: app.js must load first to define initializeSignalR -->
+    <script src="app.js?v=4.0"></script>
     <script src="facial-detection.js?v=1.2"></script>
     <script src="voice-cloning.js?v=1.0"></script>
-    <script src="companion-ui.js?v=1.6"></script>
+    <script src="companion-ui.js?v=2.8"></script>
 </body>
 </html>

@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.ML;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using NeuroSync.Api.Hubs;
 using NeuroSync.Api.Services;
+using NeuroSync.Api.Data;
 using NeuroSync.IoT;
 using NeuroSync.IoT.Configuration;
 using NeuroSync.IoT.Interfaces;
@@ -14,6 +16,26 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Add Entity Framework Core (Human OS v2.0 Database)
+// Using InMemory for development - switch to SQL Server for production
+builder.Services.AddDbContext<NeuroSyncDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        // Use SQL Server if connection string is provided
+        options.UseSqlServer(connectionString, sqlOptions =>
+        {
+            sqlOptions.MigrationsAssembly("NeuroSync.Api");
+        });
+    }
+    else
+    {
+        // Fallback to InMemory for development
+        options.UseInMemoryDatabase("NeuroSyncHumanOS");
+    }
+});
 
 // Configure CORS for SignalR and API
 builder.Services.AddCors(options =>
@@ -212,6 +234,72 @@ builder.Services.AddScoped<AdvancedActionOrchestrator>(sp =>
     var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
     var decisionEngine = sp.GetRequiredService<DecisionEngine>();
     return new AdvancedActionOrchestrator(logger, realIoTController, iotSimulator, decisionEngine);
+});
+
+// Human OS v2.0 Services
+builder.Services.AddScoped<EmotionalOSDashboardService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<EmotionalOSDashboardService>>();
+    var emotionDetection = sp.GetRequiredService<EmotionDetectionService>();
+    var collapsePredictor = sp.GetService<ICollapseRiskPredictor>();
+    return new EmotionalOSDashboardService(context, logger, emotionDetection, collapsePredictor);
+});
+
+builder.Services.AddScoped<LifeDomainsEngineService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<LifeDomainsEngineService>>();
+    return new LifeDomainsEngineService(context, logger);
+});
+
+// Phase 2 Services
+builder.Services.AddScoped<DecisionIntelligenceEngineService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<DecisionIntelligenceEngineService>>();
+    return new DecisionIntelligenceEngineService(context, logger);
+});
+
+builder.Services.AddScoped<CollapseRiskPredictorService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<CollapseRiskPredictorService>>();
+    var dashboardService = sp.GetService<EmotionalOSDashboardService>();
+    return new CollapseRiskPredictorService(context, logger, dashboardService);
+});
+
+// Register as ICollapseRiskPredictor for dependency injection
+builder.Services.AddScoped<ICollapseRiskPredictor>(sp => sp.GetRequiredService<CollapseRiskPredictorService>());
+
+// Phase 3 Services
+builder.Services.AddScoped<IdentityPurposeEngineService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<IdentityPurposeEngineService>>();
+    return new IdentityPurposeEngineService(context, logger);
+});
+
+builder.Services.AddScoped<LifeMemoryGraphService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<LifeMemoryGraphService>>();
+    return new LifeMemoryGraphService(context, logger);
+});
+
+builder.Services.AddScoped<EmotionalGrowthAnalyticsService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<EmotionalGrowthAnalyticsService>>();
+    return new EmotionalGrowthAnalyticsService(context, logger);
+});
+
+// Phase 4 Service
+builder.Services.AddScoped<TrustSafetyLayerService>(sp =>
+{
+    var context = sp.GetRequiredService<NeuroSyncDbContext>();
+    var logger = sp.GetRequiredService<ILogger<TrustSafetyLayerService>>();
+    return new TrustSafetyLayerService(context, logger);
 });
 
 var app = builder.Build();

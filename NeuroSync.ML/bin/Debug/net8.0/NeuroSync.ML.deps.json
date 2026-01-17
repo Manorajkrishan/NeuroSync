@@ -10,10 +10,35 @@
         "dependencies": {
           "Microsoft.ML": "5.0.0",
           "Microsoft.ML.FastTree": "5.0.0",
+          "Microsoft.ML.LightGbm": "5.0.0",
           "NeuroSync.Core": "1.0.0"
         },
         "runtime": {
           "NeuroSync.ML.dll": {}
+        }
+      },
+      "LightGBM/4.6.0": {
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/lib_lightgbm.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/lib_lightgbm.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/lib_lightgbm.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/lightgbm.exe": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
         }
       },
       "Microsoft.Bcl.AsyncInterfaces/9.0.4": {
@@ -210,6 +235,29 @@
           }
         }
       },
+      "Microsoft.ML.LightGbm/5.0.0": {
+        "dependencies": {
+          "LightGBM": "4.6.0",
+          "Microsoft.Bcl.AsyncInterfaces": "9.0.4",
+          "Microsoft.ML": "5.0.0",
+          "Microsoft.ML.FastTree": "5.0.0",
+          "Newtonsoft.Json": "13.0.3",
+          "System.Buffers": "4.6.1",
+          "System.CodeDom": "9.0.4",
+          "System.Collections.Immutable": "9.0.4",
+          "System.Memory": "4.6.3",
+          "System.Numerics.Tensors": "9.0.4",
+          "System.Reflection.Emit.Lightweight": "4.7.0",
+          "System.Runtime.CompilerServices.Unsafe": "6.1.2",
+          "System.Threading.Channels": "9.0.4"
+        },
+        "runtime": {
+          "lib/netstandard2.0/Microsoft.ML.LightGbm.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "5.0.25.55704"
+          }
+        }
+      },
       "Newtonsoft.Json/13.0.3": {
         "runtime": {
           "lib/net6.0/Newtonsoft.Json.dll": {
@@ -273,6 +321,13 @@
       "serviceable": false,
       "sha512": ""
     },
+    "LightGBM/4.6.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-BVzUkYViYacaEH7gsM5y6Wf2rwlcEToQb24kyKhjKtwRRdKnVYmJ3kw0r21woickk5GdBpxCAQ3az3/t0+nFJw==",
+      "path": "lightgbm/4.6.0",
+      "hashPath": "lightgbm.4.6.0.nupkg.sha512"
+    },
     "Microsoft.Bcl.AsyncInterfaces/9.0.4": {
       "type": "package",
       "serviceable": true,
@@ -307,6 +362,13 @@
       "sha512": "sha512-ZcqAHfHlG9AMNlDd5OXuuw2uv+ZWa3c43yf1RNWqIRaLbwsLOpKja7kZ8Q0xkyyo2z9Bb2zKhsHtc8wV1CJojg==",
       "path": "microsoft.ml.fasttree/5.0.0",
       "hashPath": "microsoft.ml.fasttree.5.0.0.nupkg.sha512"
+    },
+    "Microsoft.ML.LightGbm/5.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-IYAeDalw02exK9i510m9zc625CxZVfWVMJlbvnfIj7NBF6tUm8XzWQ7C6uXJr2SdK14/6SZqGDiFHVeU4G5A/g==",
+      "path": "microsoft.ml.lightgbm/5.0.0",
+      "hashPath": "microsoft.ml.lightgbm.5.0.0.nupkg.sha512"
     },
     "Newtonsoft.Json/13.0.3": {
       "type": "package",

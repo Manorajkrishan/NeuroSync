@@ -1,14 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "z7QENR5n3KQ=",
+  "dgSpecHash": "Doz1GBVy8NA=",
   "success": true,
   "projectFilePath": "E:\\human ai\\NeuroSync.ML\\NeuroSync.ML.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\Krishan\\.nuget\\packages\\lightgbm\\4.6.0\\lightgbm.4.6.0.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.bcl.asyncinterfaces\\9.0.4\\microsoft.bcl.asyncinterfaces.9.0.4.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.ml\\5.0.0\\microsoft.ml.5.0.0.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.ml.cpumath\\5.0.0\\microsoft.ml.cpumath.5.0.0.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.ml.dataview\\5.0.0\\microsoft.ml.dataview.5.0.0.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.ml.fasttree\\5.0.0\\microsoft.ml.fasttree.5.0.0.nupkg.sha512",
+    "C:\\Users\\Krishan\\.nuget\\packages\\microsoft.ml.lightgbm\\5.0.0\\microsoft.ml.lightgbm.5.0.0.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\system.buffers\\4.6.1\\system.buffers.4.6.1.nupkg.sha512",
     "C:\\Users\\Krishan\\.nuget\\packages\\system.codedom\\9.0.4\\system.codedom.9.0.4.nupkg.sha512",

@@ -2,6 +2,31 @@
   "version": 3,
   "targets": {
     "net8.0": {
+      "LightGBM/4.6.0": {
+        "type": "package",
+        "build": {
+          "build/LightGBM.props": {},
+          "build/LightGBM.targets": {}
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/lib_lightgbm.so": {
+            "assetType": "native",
+            "rid": "linux-x64"
+          },
+          "runtimes/osx-x64/native/lib_lightgbm.dylib": {
+            "assetType": "native",
+            "rid": "osx-x64"
+          },
+          "runtimes/win-x64/native/lib_lightgbm.dll": {
+            "assetType": "native",
+            "rid": "win-x64"
+          },
+          "runtimes/win-x64/native/lightgbm.exe": {
+            "assetType": "native",
+            "rid": "win-x64"
+          }
+        }
+      },
       "Microsoft.Bcl.AsyncInterfaces/9.0.4": {
         "type": "package",
         "compile": {
@@ -259,6 +284,34 @@
           }
         }
       },
+      "Microsoft.ML.LightGbm/5.0.0": {
+        "type": "package",
+        "dependencies": {
+          "LightGBM": "4.6.0",
+          "Microsoft.Bcl.AsyncInterfaces": "9.0.4",
+          "Microsoft.ML": "5.0.0",
+          "Microsoft.ML.FastTree": "5.0.0",
+          "Newtonsoft.Json": "13.0.3",
+          "System.Buffers": "4.6.1",
+          "System.CodeDom": "9.0.4",
+          "System.Collections.Immutable": "9.0.4",
+          "System.Memory": "4.6.3",
+          "System.Numerics.Tensors": "9.0.4",
+          "System.Reflection.Emit.Lightweight": "4.7.0",
+          "System.Runtime.CompilerServices.Unsafe": "6.1.2",
+          "System.Threading.Channels": "9.0.4"
+        },
+        "compile": {
+          "lib/netstandard2.0/Microsoft.ML.LightGbm.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Microsoft.ML.LightGbm.dll": {
+            "related": ".xml"
+          }
+        }
+      },
       "Newtonsoft.Json/13.0.3": {
         "type": "package",
         "compile": {
@@ -391,6 +444,23 @@
     }
   },
   "libraries": {
+    "LightGBM/4.6.0": {
+      "sha512": "BVzUkYViYacaEH7gsM5y6Wf2rwlcEToQb24kyKhjKtwRRdKnVYmJ3kw0r21woickk5GdBpxCAQ3az3/t0+nFJw==",
+      "type": "package",
+      "path": "lightgbm/4.6.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "build/LightGBM.props",
+        "build/LightGBM.targets",
+        "lightgbm.4.6.0.nupkg.sha512",
+        "lightgbm.nuspec",
+        "runtimes/linux-x64/native/lib_lightgbm.so",
+        "runtimes/osx-x64/native/lib_lightgbm.dylib",
+        "runtimes/win-x64/native/lib_lightgbm.dll",
+        "runtimes/win-x64/native/lightgbm.exe"
+      ]
+    },
     "Microsoft.Bcl.AsyncInterfaces/9.0.4": {
       "sha512": "9VGI5kxIvrNG2mqLQZnUR6y/3fcnygD8eNpHR+CqfbnIXvea6nehnYknDKQTxZVPMpzpNca+7DxLBmpdB3q0Bw==",
       "type": "package",
@@ -530,6 +600,23 @@
         "runtimes/osx-x64/native/libFastTreeNative.dylib.dwarf",
         "runtimes/win-x64/native/FastTreeNative.dll",
         "runtimes/win-x86/native/FastTreeNative.dll"
+      ]
+    },
+    "Microsoft.ML.LightGbm/5.0.0": {
+      "sha512": "IYAeDalw02exK9i510m9zc625CxZVfWVMJlbvnfIj7NBF6tUm8XzWQ7C6uXJr2SdK14/6SZqGDiFHVeU4G5A/g==",
+      "type": "package",
+      "path": "microsoft.ml.lightgbm/5.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE",
+        "PACKAGE.md",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/netstandard2.0/Microsoft.ML.LightGbm.dll",
+        "lib/netstandard2.0/Microsoft.ML.LightGbm.xml",
+        "microsoft.ml.lightgbm.5.0.0.nupkg.sha512",
+        "microsoft.ml.lightgbm.nuspec",
+        "mlnetlogo.png"
       ]
     },
     "Newtonsoft.Json/13.0.3": {
@@ -810,6 +897,7 @@
     "net8.0": [
       "Microsoft.ML >= 5.0.0",
       "Microsoft.ML.FastTree >= 5.0.0",
+      "Microsoft.ML.LightGbm >= 5.0.0",
       "NeuroSync.Core >= 1.0.0"
     ]
   },
@@ -872,6 +960,10 @@
             "version": "[5.0.0, )"
           },
           "Microsoft.ML.FastTree": {
+            "target": "Package",
+            "version": "[5.0.0, )"
+          },
+          "Microsoft.ML.LightGbm": {
             "target": "Package",
             "version": "[5.0.0, )"
           }

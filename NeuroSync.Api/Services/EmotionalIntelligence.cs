@@ -42,9 +42,26 @@ public class EmotionalIntelligence
     {
         var messageLower = userMessage.ToLower();
         
-        // Academic/Exam situations
+        // IMPORTANT: Check for missing someone FIRST (before exam check, since "miss" could match both)
+        // Missing someone (family, friends, loved ones)
+        if ((messageLower.Contains("miss") && (messageLower.Contains("family") || messageLower.Contains("mom") || 
+            messageLower.Contains("mother") || messageLower.Contains("dad") || messageLower.Contains("father") || 
+            messageLower.Contains("parent") || messageLower.Contains("friend") || messageLower.Contains("loved") || 
+            messageLower.Contains("someone") || messageLower.Contains("person"))) || 
+            messageLower.Contains("missing my") || messageLower.Contains("miss my"))
+        {
+            return emotion switch
+            {
+                EmotionType.Sad => "I understand how hard it is to miss your family. That feeling of longing can be really painful. Tell me more about them - who are you missing most right now?",
+                EmotionType.Anxious => "Missing family can make you feel anxious and alone. I'm here with you. What helps you feel closer to them?",
+                EmotionType.Calm => "It sounds like you're thinking about your family. What brings you comfort when you think about them?",
+                _ => "Missing family is really hard. I'm here to listen. Tell me about what you miss most about them?"
+            };
+        }
+        
+        // Academic/Exam situations (FIXED: removed "miss" to avoid matching "I miss my family")
         if (messageLower.Contains("exam") || messageLower.Contains("test") || messageLower.Contains("failed") || 
-            messageLower.Contains("miss") || messageLower.Contains("fail") || messageLower.Contains("grade"))
+            messageLower.Contains("fail") || messageLower.Contains("grade") || messageLower.Contains("studying"))
         {
             return emotion switch
             {
@@ -68,35 +85,7 @@ public class EmotionalIntelligence
             };
         }
         
-        // Missing someone (MUST CHECK BEFORE relationship situations)
-        if (messageLower.Contains("miss") && (messageLower.Contains("mother") || messageLower.Contains("mom") || messageLower.Contains("father") || 
-            messageLower.Contains("dad") || messageLower.Contains("parent") || messageLower.Contains("family") || 
-            messageLower.Contains("friend") || messageLower.Contains("loved") || messageLower.Contains("someone")))
-        {
-            if (messageLower.Contains("mother") || messageLower.Contains("mom"))
-            {
-                return emotion switch
-                {
-                    EmotionType.Sad => "I'm so sorry you're missing your mother. That must be really hard. How long has it been?",
-                    _ => "Missing your mother is really tough. I'm here for you. Do you want to talk about her?"
-                };
-            }
-            if (messageLower.Contains("father") || messageLower.Contains("dad"))
-            {
-                return emotion switch
-                {
-                    EmotionType.Sad => "I'm so sorry you're missing your father. That must be really difficult. How are you coping?",
-                    _ => "Missing your father is really tough. I'm here to listen. Want to share some memories?"
-                };
-            }
-            return emotion switch
-            {
-                EmotionType.Sad => "I can hear how much you miss them. That pain is real, and it's okay to feel it. I'm here with you. Tell me about them?",
-                _ => "Missing someone you love is really hard. I'm here to listen. What are you missing most about them?"
-            };
-        }
-        
-        // Relationship situations
+        // Relationship situations (separate from missing someone)
         if (messageLower.Contains("friend") || messageLower.Contains("family") || messageLower.Contains("relationship") ||
             messageLower.Contains("breakup") || messageLower.Contains("fight") || messageLower.Contains("argue"))
         {

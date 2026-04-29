@@ -1,8 +1,11 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.ML;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using NeuroSync.Api.Hubs;
+using NeuroSync.Api.Middleware;
 using NeuroSync.Api.Services;
 using NeuroSync.Api.Data;
 using NeuroSync.IoT;
@@ -16,6 +19,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Rate limiting (production-friendly)
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 200,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+    options.OnRejected = async (ctx, _) =>
+    {
+        ctx.HttpContext.Response.StatusCode = 429;
+        await ctx.HttpContext.Response.WriteAsJsonAsync(new { error = "Too many requests. Please try again later." });
+    };
+});
 
 // Add Entity Framework Core (Human OS v2.0 Database)
 // Using InMemory for development - switch to SQL Server for production
@@ -194,6 +215,9 @@ builder.Services.AddHostedService<AutoRetrainingService>(sp =>
     return new AutoRetrainingService(logger, sp, environment, dataCollector);
 });
 
+// Flush real-world data to file on app shutdown
+builder.Services.AddHostedService<FlushRealWorldDataOnShutdown>();
+
 // Add Multi-Layer Emotion Fusion Service
 builder.Services.AddSingleton<MultiLayerEmotionFusionService>();
 
@@ -243,7 +267,8 @@ builder.Services.AddScoped<EmotionalOSDashboardService>(sp =>
     var logger = sp.GetRequiredService<ILogger<EmotionalOSDashboardService>>();
     var emotionDetection = sp.GetRequiredService<EmotionDetectionService>();
     var collapsePredictor = sp.GetService<ICollapseRiskPredictor>();
-    return new EmotionalOSDashboardService(context, logger, emotionDetection, collapsePredictor);
+    var conversationMemory = sp.GetService<ConversationMemory>();
+    return new EmotionalOSDashboardService(context, logger, emotionDetection, collapsePredictor, conversationMemory);
 });
 
 builder.Services.AddScoped<LifeDomainsEngineService>(sp =>
@@ -299,7 +324,8 @@ builder.Services.AddScoped<TrustSafetyLayerService>(sp =>
 {
     var context = sp.GetRequiredService<NeuroSyncDbContext>();
     var logger = sp.GetRequiredService<ILogger<TrustSafetyLayerService>>();
-    return new TrustSafetyLayerService(context, logger);
+    var conversationMemory = sp.GetService<ConversationMemory>();
+    return new TrustSafetyLayerService(context, logger, conversationMemory);
 });
 
 var app = builder.Build();
@@ -318,8 +344,13 @@ if (app.Environment.IsDevelopment())
     // app.UseHttpsRedirection(); // Commented out to avoid warning when only HTTP is configured
 }
 
+// Global exception handler (no stack trace in production)
+app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
+
 // Use CORS
 app.UseCors("AllowAll");
+
+app.UseRateLimiter();
 
 app.UseAuthorization();
 

@@ -13,7 +13,7 @@ public class RealWorldDataCollector
     private readonly ILogger<RealWorldDataCollector> _logger;
     private readonly string _dataFilePath;
     private const int MaxInMemoryData = 1000;
-    private const int FlushThreshold = 100;
+    private const int FlushThreshold = 20; // Flush sooner so retraining sees new data
 
     public RealWorldDataCollector(ILogger<RealWorldDataCollector> logger, IWebHostEnvironment environment)
     {
@@ -24,6 +24,27 @@ public class RealWorldDataCollector
             Directory.CreateDirectory(dataDir);
         }
         _dataFilePath = Path.Combine(dataDir, "realworld_emotions.csv");
+    }
+
+    /// <summary>
+    /// Collects a user correction when the model was wrong. High value for accuracy.
+    /// </summary>
+    public void CollectCorrection(string userText, string correctEmotionLabel)
+    {
+        var text = userText?.Trim();
+        var label = correctEmotionLabel?.Trim().ToLower();
+        if (string.IsNullOrWhiteSpace(text) || text.Length < 2 || string.IsNullOrWhiteSpace(label)) return;
+        if (!IsValidLabel(label)) return;
+
+        var item = new EmotionData { Text = text, Label = label };
+        _collectedData.Enqueue(item);
+        if (_collectedData.Count >= 10) FlushToFile();
+        _logger.LogInformation("User correction collected: \"{Text}\" -> {Label}", text, label);
+    }
+
+    private static bool IsValidLabel(string label)
+    {
+        return label is "happy" or "sad" or "angry" or "anxious" or "calm" or "excited" or "frustrated" or "neutral";
     }
 
     /// <summary>

@@ -387,6 +387,41 @@ body {
     padding: 20px;
 }
 
+/* Dashboard loading overlay (skeleton feel) */
+body.dashboard-loading .dashboard-main {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.85;
+}
+body.dashboard-loading .dashboard-main::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.3);
+    border-radius: 16px;
+    animation: dashboard-pulse 1.2s ease-in-out infinite;
+}
+@keyframes dashboard-pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.5; }
+}
+
+/* User-visible error message (toast) */
+.dashboard-error-message {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #dc2626;
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 9999;
+    font-size: 0.95rem;
+    max-width: 90%;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .dashboard-row {

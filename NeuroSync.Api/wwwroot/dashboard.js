@@ -17,6 +17,67 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('refreshBtn').addEventListener('click', () => {
         loadDashboardData();
     });
+
+    // Add decision
+    var addDec = document.getElementById('addDecisionBtn');
+    var newDec = document.getElementById('newDecisionText');
+    if (addDec && newDec) {
+        addDec.addEventListener('click', async function () {
+            var t = (newDec.value || '').trim();
+            if (!t) return;
+            addDec.disabled = true;
+            try {
+                var r = await fetch(API_BASE_URL + '/api/decisions/frame', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUserId, decisionText: t })
+                });
+                if (r.ok) { newDec.value = ''; await loadRecentDecisions(); await loadDomainHealth(); }
+                else console.error('Failed to add decision', await r.text());
+            } finally { addDec.disabled = false; }
+        });
+    }
+
+    // Add life event
+    var addEvt = document.getElementById('addEventBtn');
+    var newEvtDesc = document.getElementById('newEventDesc');
+    var newEvtType = document.getElementById('newEventType');
+    if (addEvt && newEvtDesc && newEvtType) {
+        addEvt.addEventListener('click', async function () {
+            var d = (newEvtDesc.value || '').trim();
+            if (!d) return;
+            addEvt.disabled = true;
+            try {
+                var r = await fetch(API_BASE_URL + '/api/memory/event', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: currentUserId, description: d, eventType: parseInt(newEvtType.value, 10) || 1, emotionalSignificance: 50, lifeImpact: 1 })
+                });
+                if (r.ok) { newEvtDesc.value = ''; await loadLifeStory(); }
+                else console.error('Failed to add event', await r.text());
+            } finally { addEvt.disabled = false; }
+        });
+    }
+
+    // Adjust domain
+    var adjBtn = document.getElementById('adjustDomainBtn');
+    var adjDom = document.getElementById('adjustDomain');
+    var adjScore = document.getElementById('adjustScore');
+    var adjStress = document.getElementById('adjustStress');
+    if (adjBtn && adjDom && adjScore && adjStress) {
+        adjBtn.addEventListener('click', async function () {
+            var dom = adjDom.value;
+            var sc = parseInt(adjScore.value, 10); var st = parseInt(adjStress.value, 10);
+            if (isNaN(sc)) sc = 50; if (isNaN(st)) st = 30;
+            adjBtn.disabled = true;
+            try {
+                var r = await fetch(API_BASE_URL + '/api/domains/state/' + dom + '?userId=' + encodeURIComponent(currentUserId), {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ emotionalScore: sc, stressLevel: st })
+                });
+                if (r.ok) { await loadDomainHealth(); await loadDailySummary(); await loadStressAndEnergy(); }
+                else console.error('Failed to update domain', await r.text());
+            } finally { adjBtn.disabled = false; }
+        });
+    }
     
     // Set up SignalR connection
     initializeSignalR();
@@ -25,34 +86,52 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadDashboardData, 30000);
 });
 
+// Show loading state for dashboard sections
+function setDashboardLoading(loading) {
+    const main = document.querySelector('.dashboard-main');
+    if (main) main.classList.toggle('dashboard-loading', !!loading);
+    const statusText = document.getElementById('connectionText');
+    if (statusText && loading) statusText.textContent = 'Loading...';
+    document.body.classList.toggle('dashboard-loading', !!loading);
+}
+
+// Show user-visible error message (toast or inline)
+function showDashboardError(message) {
+    const existing = document.getElementById('dashboardErrorMessage');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'dashboardErrorMessage';
+    el.setAttribute('role', 'alert');
+    el.className = 'dashboard-error-message';
+    el.textContent = message || 'Failed to load dashboard. Please refresh.';
+    document.body.prepend(el);
+    setTimeout(() => el.remove(), 6000);
+}
+
 // Load all dashboard data
 async function loadDashboardData() {
+    setDashboardLoading(true);
+    const errEl = document.getElementById('dashboardErrorMessage');
+    if (errEl) errEl.remove();
     try {
         console.log('📊 Loading dashboard data...');
         
-        // Load daily summary
         await loadDailySummary();
-        
-        // Load domain health report
         await loadDomainHealth();
-        
-        // Load burnout risk
         await loadBurnoutRisk();
-        
-        // Load growth metrics
         await loadGrowthMetrics();
-        
-        // Load mental load
         await loadMentalLoad();
-        
-        // Load life story
         await loadLifeStory();
+        await loadRecentDecisions();
         
         updateConnectionStatus(true, 'Connected');
         console.log('✅ Dashboard data loaded');
     } catch (error) {
         console.error('❌ Error loading dashboard:', error);
         updateConnectionStatus(false, 'Error loading data');
+        showDashboardError('Could not load dashboard. Check connection and try again.');
+    } finally {
+        setDashboardLoading(false);
     }
 }
 
@@ -215,6 +294,25 @@ async function loadMentalLoad() {
     }
 }
 
+// Load recent decisions
+async function loadRecentDecisions() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/decisions/recent?userId=${currentUserId}&limit=5`);
+        if (!response.ok) return;
+        const list = await response.json();
+        const el = document.getElementById('recentDecisions');
+        if (!el) return;
+        if (!list || list.length === 0) {
+            el.innerHTML = '<p class="empty">No recent decisions</p>';
+            return;
+        }
+        el.innerHTML = '<ul>' + list.map(d => {
+            var t = (d.decisionText || '').toString();
+            return '<li><strong>' + t.substring(0, 60) + (t.length > 60 ? '...' : '') + '</strong> <small>(' + (d.decisionType || '') + ', ' + (d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '') + ')</small></li>';
+        }).join('') + '</ul>';
+    } catch (e) { console.error('Error loading recent decisions', e); }
+}
+
 // Load stress and energy from summary
 async function loadStressAndEnergy() {
     try {
@@ -292,6 +390,21 @@ function initializeSignalR() {
 
     connection.onclose(() => {
         updateConnectionStatus(false, 'Disconnected');
+    });
+
+    connection.on('EmotionDetected', function (data) {
+        if (data && data.emotion != null) {
+            var em = (typeof data.emotion === 'number' ? ['Happy','Sad','Angry','Anxious','Calm','Excited','Frustrated','Neutral'][data.emotion] : data.emotion) || 'Neutral';
+            var conf = (data.confidence != null ? (data.confidence * 100).toFixed(0) : '--');
+            var badge = document.getElementById('currentEmotion');
+            var cf = document.getElementById('emotionConfidence');
+            if (badge) { badge.textContent = em; badge.className = 'emotion-badge ' + (em.toLowerCase()); }
+            if (cf) cf.textContent = 'Confidence: ' + conf + '%';
+        }
+    });
+
+    connection.on('AdaptiveResponse', function (data) {
+        if (data && data.message) { /* optional: show a brief "Last: ..." tooltip; for now we rely on EmotionDetected and poll */ }
     });
 
     connection.start()

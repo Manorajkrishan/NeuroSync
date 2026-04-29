@@ -114,6 +114,7 @@ public class YouTubeMusicService : IMusicService
         {
             // YouTube Music doesn't have a direct stop API without Premium
             _logger?.Invoke("YouTube Music: Stop requires YouTube Music Premium API");
+            await Task.CompletedTask;
             return true;
         }
         catch (Exception ex)
@@ -129,6 +130,7 @@ public class YouTubeMusicService : IMusicService
         {
             // Volume control requires device integration (Cast SDK, etc.)
             _logger?.Invoke($"YouTube Music: Volume control requires device integration");
+            await Task.CompletedTask;
             return true;
         }
         catch (Exception ex)

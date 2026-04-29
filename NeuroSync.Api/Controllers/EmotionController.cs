@@ -106,6 +106,43 @@ public class EmotionController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Trigger model retrain (uses Data/emotions.csv + Data/realworld_emotions.csv). Retrain runs within ~5 min.
+    /// </summary>
+    [HttpPost("retrain")]
+    public IActionResult RequestRetrain()
+    {
+        var dataDir = Path.Combine(_environment.ContentRootPath, "Data");
+        if (!Directory.Exists(dataDir)) Directory.CreateDirectory(dataDir);
+        try
+        {
+            System.IO.File.WriteAllText(Path.Combine(dataDir, "please_retrain"), "");
+            return Ok(new { ok = true, message = "Retrain requested. Model will retrain within ~5 minutes. Restart the app to load the new model." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not write please_retrain file");
+            return StatusCode(500, new { error = "Could not request retrain" });
+        }
+    }
+
+    /// <summary>
+    /// User corrects a wrong emotion. Helps improve accuracy (self-learning).
+    /// Body: { "text": "user's message", "correctEmotion": "anxious" }
+    /// </summary>
+    [HttpPost("correct")]
+    public IActionResult CorrectEmotion([FromBody] EmotionCorrectionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request?.Text) || string.IsNullOrWhiteSpace(request?.CorrectEmotion))
+            return BadRequest(new { error = "Text and correctEmotion are required" });
+
+        var collector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
+        if (collector == null) return StatusCode(500, new { error = "Correction service not available" });
+
+        collector.CollectCorrection(request.Text, request.CorrectEmotion);
+        return Ok(new { ok = true, message = "Thanks! This helps improve accuracy." });
+    }
+
     [HttpGet("types")]
     public IActionResult GetEmotionTypes()
     {
@@ -429,5 +466,11 @@ public class EmotionController : ControllerBase
             return StatusCode(500, new { error = errorMessage, details = _environment.IsDevelopment() ? ex.ToString() : null });
         }
     }
+}
+
+public class EmotionCorrectionRequest
+{
+    public string? Text { get; set; }
+    public string? CorrectEmotion { get; set; }
 }
 

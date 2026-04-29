@@ -447,7 +447,7 @@ function sendEmotionDetectionRequest(text, userId, apiBaseUrl) {
     .catch(err => console.error('Error:', err));
 }
 
-function addChatMessage(text, type) {
+function addChatMessage(text, type, opts) {
     const chatMessages = document.getElementById('chatMessages');
     if (!chatMessages) return;
 
@@ -471,6 +471,47 @@ function addChatMessage(text, type) {
 
     bubble.appendChild(textDiv);
     bubble.appendChild(timeDiv);
+
+    if (type === 'ai' && opts && opts.showCorrect && (opts.userText || '').trim().length > 0) {
+        var correctSpan = document.createElement('div');
+        correctSpan.className = 'message-correct';
+        correctSpan.style.cssText = 'margin-top:6px;font-size:11px;opacity:0.9;';
+        var link = document.createElement('a');
+        link.href = '#';
+        link.textContent = 'Wrong? Correct';
+        link.style.cssText = 'color:var(--accent, #7c3aed);';
+        var pickerDiv = null;
+        link.onclick = function(e) {
+            e.preventDefault();
+            if (pickerDiv && pickerDiv.style.display !== 'none') { pickerDiv.style.display = 'none'; link.textContent = 'Wrong? Correct'; return; }
+            var emotions = ['happy','sad','angry','anxious','calm','excited','frustrated','neutral'];
+            if (pickerDiv) { pickerDiv.style.display = 'block'; link.textContent = 'Wrong? Pick:'; return; }
+            pickerDiv = document.createElement('div');
+            pickerDiv.style.cssText = 'margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;';
+            emotions.forEach(function(em) {
+                var btn = document.createElement('button');
+                btn.textContent = em;
+                btn.style.cssText = 'font-size:10px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;cursor:pointer;background:#fff;';
+                btn.onclick = function() {
+                    var baseUrl = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '') || '';
+                    fetch(baseUrl + '/api/emotion/correct', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: opts.userText, correctEmotion: em })
+                    }).then(function(r) { return r.json(); }).then(function() {
+                        link.textContent = 'Thanks!';
+                        link.onclick = null;
+                        if (pickerDiv && pickerDiv.parentNode) pickerDiv.parentNode.removeChild(pickerDiv);
+                    }).catch(function() { link.textContent = 'Error'; });
+                };
+                pickerDiv.appendChild(btn);
+            });
+            correctSpan.appendChild(pickerDiv);
+            link.textContent = 'Wrong? Pick:';
+        };
+        correctSpan.appendChild(link);
+        bubble.appendChild(correctSpan);
+    }
+
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(bubble);
     chatMessages.appendChild(messageDiv);
@@ -573,8 +614,8 @@ function displayAdaptiveResponse(response) {
     _recentMessages.add(messageKey);
     _messageTimestamps.set(messageKey, now);
 
-    // Add AI response to chat
-    addChatMessage(response.message, 'ai');
+    // Add AI response to chat (with optional "Wrong? Correct" for text-based flow)
+    addChatMessage(response.message, 'ai', opts && (opts.showCorrect === true) ? { showCorrect: true, userText: opts.userText || window._lastEmotionUserText } : undefined);
 
     // Update avatar if emotion changed
     if (response.emotion !== undefined) {

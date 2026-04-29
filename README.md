@@ -208,6 +208,15 @@ Sample training data is provided in `NeuroSync.ML/TrainingDataGenerator.cs`. You
 
 Trained models are stored in `NeuroSync.Api/Models/emotion-model.zip`. The model is automatically created on first run if it doesn't exist.
 
+### Getting More Accuracy & a 100% Working System
+
+- **Use the 10K dataset**: Put `emotions.csv` (Text,Label) in `NeuroSync.Api/Data/`. Delete `Models/emotion-model.zip` and run; the model trains on 10K examples with LightGbm and Word Embeddings (~93%+).
+- **Correct wrong predictions**: After each AI reply from text input, use **Wrong? Correct** → enter the right emotion (happy, sad, angry, anxious, calm, excited, frustrated, neutral). Corrections are stored and used in the next retrain.
+- **Self-learning**: High-confidence predictions are logged to `Data/realworld_emotions.csv`. When 50+ new examples exist, the app auto-retrains (every 5 min check). Data is flushed on shutdown.
+- **Add more data**: Append rows to `Data/emotions.csv` or `Data/realworld_emotions.csv` (same format: `Text,Label`), then delete `emotion-model.zip` and restart to retrain.
+- **Correction API**: `POST /api/emotion/correct` with `{ "text": "user message", "correctEmotion": "anxious" }` to submit corrections programmatically.
+- **Manual retrain**: `POST /api/emotion/retrain` to request model retrain (runs within ~5 min). Restart the app to load the new model.
+
 ## Development
 
 ### Adding New Emotions
@@ -249,12 +258,25 @@ public List<IoTAction> ProcessEmotion(EmotionType emotion)
 - Frustrated: "This is so frustrating!"
 - Neutral: "I see, that makes sense"
 
+## Production Checklist
+
+Before deploying to production:
+
+1. **Database**: Set `ConnectionStrings:DefaultConnection` in `appsettings.json` or environment variables. Use SQL Server; run EF Core migrations: `dotnet ef database update --project NeuroSync.Api`.
+2. **Environment**: Set `ASPNETCORE_ENVIRONMENT=Production`. Swagger is disabled in non-Development; error responses do not include stack traces or exception details.
+3. **Rate limiting**: Global rate limiter is enabled (200 requests/minute per client). Adjust in `Program.cs` if needed.
+4. **HTTPS**: Enable HTTPS and consider `app.UseHttpsRedirection()` in production.
+5. **Authentication**: Add JWT or API-key authentication for protected endpoints if required; the API currently does not enforce auth.
+6. **Logging**: Configure Serilog sinks (file, Seq, etc.) and log levels in `appsettings.Production.json`. Avoid logging PII unless consented.
+7. **Consent**: Ensure consent for storing conversation history and emotion patterns (persisted when using SQL Server). See Ethical Considerations.
+
 ## Ethical Considerations
 
-- No personal data is stored without consent
-- Emotion data is processed in real-time and not persisted
-- The system is designed for demonstration and research purposes
-- Not intended for medical diagnosis or clinical use
+- Obtain user consent before storing conversation history and emotion patterns (persisted when using SQL Server).
+- Emotion data may be processed in real-time and, when configured, persisted for personalization and insights.
+- The system is designed for demonstration and research purposes.
+- Not intended for medical diagnosis or clinical use.
+- For production, configure logging and data retention according to your privacy policy.
 
 ## Future Enhancements
 

@@ -19,6 +19,29 @@ public class LifeDomainsController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Update domain state (self-report). Body: { emotionalScore?, stressLevel?, currentState? }</summary>
+    [HttpPut("state/{domain}")]
+    public async Task<IActionResult> UpdateDomainState(
+        [FromRoute] LifeDomainType domain,
+        [FromBody] UpdateDomainStateRequest? body,
+        [FromQuery] string? userId = null)
+    {
+        try
+        {
+            if (domain == LifeDomainType.All) return BadRequest(new { error = "Cannot update All domain" });
+            userId ??= Request.Headers["X-User-Id"].FirstOrDefault() ?? "default";
+            var b = body ?? new UpdateDomainStateRequest();
+            var updated = await _domainsService.UpdateDomainStateAsync(
+                userId, domain, b.EmotionalScore, b.StressLevel, b.CurrentState);
+            return Ok(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating domain {Domain}", domain);
+            return StatusCode(500, new { error = $"Failed to update {domain}", details = ex.Message });
+        }
+    }
+
     /// <summary>
     /// Get state of a specific life domain
     /// </summary>
@@ -100,4 +123,11 @@ public class LifeDomainsController : ControllerBase
             return StatusCode(500, new { error = $"Failed to get {domain} domain actions", details = ex.Message });
         }
     }
+}
+
+public class UpdateDomainStateRequest
+{
+    public double? EmotionalScore { get; set; }
+    public double? StressLevel { get; set; }
+    public string? CurrentState { get; set; }
 }

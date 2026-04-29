@@ -20,6 +20,11 @@ public class NeuroSyncDbContext : DbContext
     public DbSet<LifeEvent> LifeEvents { get; set; }
     public DbSet<EmotionalGrowthMetrics> EmotionalGrowthMetrics { get; set; }
 
+    // Conversation memory persistence
+    public DbSet<ConversationSessionEntity> ConversationSessions { get; set; }
+    public DbSet<ConversationEntryEntity> ConversationEntries { get; set; }
+    public DbSet<EmotionPatternEntity> EmotionPatterns { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -93,6 +98,29 @@ public class NeuroSyncDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.UserId).IsUnique();
+        });
+
+        // Conversation memory entities
+        modelBuilder.Entity<ConversationSessionEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId).IsUnique();
+            entity.Property(e => e.UserId).HasMaxLength(128);
+        });
+        modelBuilder.Entity<ConversationEntryEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.UserId);
+            entity.Property(e => e.UserId).HasMaxLength(128);
+            entity.Property(e => e.UserMessage).HasMaxLength(2000);
+            entity.Property(e => e.ResponseMessage).HasMaxLength(2000);
+        });
+        modelBuilder.Entity<EmotionPatternEntity>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.UserId, e.Emotion }).IsUnique();
+            entity.Property(e => e.UserId).HasMaxLength(128);
+            entity.Property(e => e.CommonTriggersJson).HasMaxLength(2000);
         });
     }
 }

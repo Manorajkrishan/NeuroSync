@@ -46,6 +46,16 @@ public class LifeMemoryGraphService
         return lifeEvent;
     }
 
+    /// <summary>Get recent life events for dashboard and lists.</summary>
+    public async Task<List<LifeEvent>> GetRecentEventsAsync(string userId, int limit = 20)
+    {
+        return await _context.LifeEvents
+            .Where(e => e.UserId == userId)
+            .OrderByDescending(e => e.Timestamp)
+            .Take(limit)
+            .ToListAsync();
+    }
+
     public async Task<EmotionalNarrativeArc> BuildEmotionalNarrativeAsync(string userId, int months = 6)
     {
         var cutoffDate = DateTime.UtcNow.AddMonths(-months);

@@ -58,6 +58,18 @@ public class AutoRetrainingService : BackgroundService
 
     private async Task CheckAndRetrainIfNeeded(CancellationToken cancellationToken)
     {
+        var dataDir = Path.Combine(_environment.ContentRootPath, "Data");
+        var pleaseRetrainPath = Path.Combine(dataDir, "please_retrain");
+        if (System.IO.File.Exists(pleaseRetrainPath))
+        {
+            try { System.IO.File.Delete(pleaseRetrainPath); } catch { /* ignore */ }
+            _logger.LogInformation("Manual retrain requested. Starting retraining...");
+            await RetrainModelAsync(cancellationToken);
+            _lastDataCount = _dataCollector.LoadFromFile().Count;
+            _lastRetrainTime = DateTime.UtcNow;
+            return;
+        }
+
         // Check if enough time has passed since last retrain
         if ((DateTime.UtcNow - _lastRetrainTime).TotalMinutes < MinRetrainIntervalMinutes)
         {
@@ -109,36 +121,38 @@ public class AutoRetrainingService : BackgroundService
                     var modelPath = Path.Combine(_environment.ContentRootPath, "Models", "emotion-model.zip");
                     var trainer = new EmotionModelTrainer();
                     
-                    // Load all training data
+                    // Load all training data (prioritize: emotions.csv 10K base, then real-world)
                     var trainingData = new List<EmotionData>();
-                    
-                    // Load base comprehensive data
-                    trainingData.AddRange(TrainingDataGenerator.GenerateComprehensiveData());
-                    _logger.LogInformation($"Loaded {trainingData.Count} base training examples");
-                    
-                    // Load real-world collected data
+                    var dataDir = Path.Combine(_environment.ContentRootPath, "Data");
+                    var datasetPath = Path.Combine(dataDir, "emotions.csv");
+
+                    // 1) Base: emotions.csv (10K) or fallback to comprehensive
+                    if (File.Exists(datasetPath))
+                    {
+                        try
+                        {
+                            var baseData = DatasetLoader.LoadFromFile(datasetPath);
+                            trainingData.AddRange(baseData);
+                            _logger.LogInformation($"Loaded {baseData.Count} base examples from emotions.csv");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to load emotions.csv, using comprehensive data");
+                            trainingData.AddRange(TrainingDataGenerator.GenerateComprehensiveData());
+                        }
+                    }
+                    else
+                    {
+                        trainingData.AddRange(TrainingDataGenerator.GenerateComprehensiveData());
+                        _logger.LogInformation($"Loaded {trainingData.Count} base examples (comprehensive)");
+                    }
+
+                    // 2) Real-world + user corrections (highest priority for learning)
                     var realWorldData = _dataCollector.LoadFromFile();
                     if (realWorldData.Count > 0)
                     {
                         trainingData.AddRange(realWorldData);
                         _logger.LogInformation($"Added {realWorldData.Count} real-world examples");
-                    }
-                    
-                    // Try to load external dataset
-                    var dataDir = Path.Combine(_environment.ContentRootPath, "Data");
-                    var datasetPath = Path.Combine(dataDir, "emotions.csv");
-                    if (File.Exists(datasetPath))
-                    {
-                        try
-                        {
-                            var externalData = DatasetLoader.LoadFromFile(datasetPath);
-                            trainingData.AddRange(externalData);
-                            _logger.LogInformation($"Added {externalData.Count} examples from external dataset");
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to load external dataset");
-                        }
                     }
                     
                     _logger.LogInformation($"Training model with {trainingData.Count} total examples...");

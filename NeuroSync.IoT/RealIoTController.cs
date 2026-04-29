@@ -132,6 +132,7 @@ public class RealIoTController
         // Light effects are handled similarly to setColor but with effects
         // For now, just log
         _logger?.Invoke($"RealIoTController: Light effect {action.ActionType} for {action.DeviceId} - requires device-specific implementation");
+        await Task.CompletedTask;
         return false;
     }
 

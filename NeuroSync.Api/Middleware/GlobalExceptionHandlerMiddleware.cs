@@ -41,15 +41,16 @@ public class GlobalExceptionHandlerMiddleware
         context.Response.ContentType = "application/json";
         context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
+        // Never expose stack trace or exception details in production
         var response = new
         {
             error = new
             {
-                message = _environment.IsDevelopment() 
-                    ? exception.Message 
+                message = _environment.IsDevelopment()
+                    ? exception.Message
                     : "An error occurred while processing your request.",
                 details = _environment.IsDevelopment() ? exception.ToString() : null,
-                type = exception.GetType().Name,
+                type = _environment.IsDevelopment() ? exception.GetType().Name : "ServerError",
                 statusCode = context.Response.StatusCode,
                 timestamp = DateTime.UtcNow
             }

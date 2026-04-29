@@ -289,6 +289,7 @@ public class IdentityPurposeEngineService
             gaps.Add("Continue exploring what brings you fulfillment");
         }
 
+        await Task.CompletedTask;
         return gaps;
     }
 

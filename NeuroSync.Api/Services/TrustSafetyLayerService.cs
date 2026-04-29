@@ -10,13 +10,16 @@ public class TrustSafetyLayerService
 {
     private readonly NeuroSyncDbContext _context;
     private readonly ILogger<TrustSafetyLayerService> _logger;
+    private readonly ConversationMemory? _conversationMemory;
 
     public TrustSafetyLayerService(
         NeuroSyncDbContext context,
-        ILogger<TrustSafetyLayerService> logger)
+        ILogger<TrustSafetyLayerService> logger,
+        ConversationMemory? conversationMemory = null)
     {
         _context = context;
         _logger = logger;
+        _conversationMemory = conversationMemory;
     }
 
     public async Task<DependencyAssessment> DetectEmotionalDependencyAsync(string userId)
@@ -115,12 +118,21 @@ public class TrustSafetyLayerService
             dependencyIndicators.Add("High correlation between emotional state and AI usage");
         }
 
-        // Check for human interaction decline (would integrate with social data)
-        // For now, flag if dependency is high
-        if (dependency.DependencyLevel >= DependencyLevel.High)
+        // Check for human interaction decline: high AI conversation volume as proxy when no social data
+        var highVolumeAi = false;
+        if (_conversationMemory != null)
+        {
+            var ctx = _conversationMemory.GetOrCreateContext(userId);
+            var recentDays = 30;
+            if (ctx.ConversationCount >= recentDays * 2 && ctx.LastInteraction.HasValue && (DateTime.UtcNow - ctx.LastInteraction.Value).TotalDays < 7)
+                highVolumeAi = true;
+        }
+        if (dependency.DependencyLevel >= DependencyLevel.High || highVolumeAi)
         {
             replacementBehaviors.Add("Possible decline in human social interactions");
-            dependencyIndicators.Add("Dependency level suggests human interaction may be reduced");
+            dependencyIndicators.Add(dependency.DependencyLevel >= DependencyLevel.High
+                ? "Dependency level suggests human interaction may be reduced"
+                : "High volume of AI conversations may indicate reduced time for human dialogue");
         }
 
         return new AIAttachmentAnalysis
@@ -130,7 +142,7 @@ public class TrustSafetyLayerService
             AttachmentPatterns = attachmentPatterns,
             ReplacementBehaviors = replacementBehaviors,
             DependencyIndicators = dependencyIndicators,
-            HumanInteractionDecline = dependency.DependencyLevel >= DependencyLevel.High
+            HumanInteractionDecline = dependency.DependencyLevel >= DependencyLevel.High || highVolumeAi
         };
     }
 
@@ -290,6 +302,7 @@ public class TrustSafetyLayerService
     public async Task<EthicalBoundaries> EnsureEthicalBoundariesAsync()
     {
         // Ethical boundaries that the system should maintain
+        await Task.CompletedTask;
         return new EthicalBoundaries
         {
             AILimits = new List<string>

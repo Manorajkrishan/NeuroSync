@@ -234,6 +234,8 @@ async function detectEmotion(textParam = null) {
             sessionStorage.setItem('neuroSync_userId', userId);
         }
 
+        window._lastEmotionUserText = text || null;
+
         const response = await fetch(`${API_BASE_URL}/api/emotion/detect`, {
             method: 'POST',
             headers: {
@@ -307,7 +309,7 @@ async function detectEmotion(textParam = null) {
                 try {
                     // Only display if displayAdaptiveResponse function exists (from companion-ui.js)
                     if (typeof displayAdaptiveResponse === 'function') {
-                        displayAdaptiveResponse(data.adaptiveResponse);
+                        displayAdaptiveResponse(data.adaptiveResponse, { showCorrect: true, userText: text });
                     }
                 } catch (error) {
                     console.error('Error displaying adaptive response:', error);
@@ -845,13 +847,13 @@ function displayActionResult(actionResult) {
         // Handle voice note playback (auto-play if autoPlay is true)
         if (actionResult.actionType === 'play_voice' && actionResult.parameters.voiceNoteId) {
             const audioPlayer = document.getElementById('audioPlayer');
-            const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
-            audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${actionResult.parameters.voiceNoteId}?userId=${userId}`;
-            audioPlayer.style.display = 'block';
-            
-            // Auto-play if requested
-            if (actionResult.parameters.autoPlay) {
-                audioPlayer.play().catch(err => console.error('Error playing audio:', err));
+            if (audioPlayer) {
+                const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
+                audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${actionResult.parameters.voiceNoteId}?userId=${userId}`;
+                audioPlayer.style.display = 'block';
+                if (actionResult.parameters.autoPlay) {
+                    audioPlayer.play().catch(err => console.error('Error playing audio:', err));
+                }
             }
             
             const relationship = actionResult.parameters.relationship ? ` (your ${actionResult.parameters.relationship})` : '';
@@ -872,12 +874,13 @@ function displayActionResult(actionResult) {
             suggestionHtml += `<div class="action-result">💚 ${actionResult.message}</div>`;
             
             if (actionResult.parameters.autoPlay && actionResult.parameters.voiceNoteId) {
-                // Auto-play the voice note
                 const audioPlayer = document.getElementById('audioPlayer');
-                const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
-                audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${actionResult.parameters.voiceNoteId}?userId=${userId}`;
-                audioPlayer.style.display = 'block';
-                audioPlayer.play().catch(err => console.error('Error playing audio:', err));
+                if (audioPlayer) {
+                    const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
+                    audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${actionResult.parameters.voiceNoteId}?userId=${userId}`;
+                    audioPlayer.style.display = 'block';
+                    audioPlayer.play().catch(err => console.error('Error playing audio:', err));
+                }
             }
             
             if (actionResult.parameters.hasVoiceNotes && actionResult.parameters.voiceNotes && actionResult.parameters.voiceNotes.length > 0) {
@@ -910,12 +913,9 @@ function displayActionResult(actionResult) {
 }
 
 async function playVoiceNote(voiceNoteId) {
-    const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
     const audioPlayer = document.getElementById('audioPlayer');
-    if (!audioPlayer) {
-        console.warn('audioPlayer element not found');
-        return;
-    }
+    if (!audioPlayer) return;
+    const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
     audioPlayer.src = `${API_BASE_URL}/api/voicenote/play/${voiceNoteId}?userId=${userId}`;
     audioPlayer.style.display = 'block';
     audioPlayer.play().catch(err => console.error('Error playing audio:', err));

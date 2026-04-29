@@ -43,6 +43,29 @@ public class LifeDomainsEngineService
         return lifeDomain;
     }
 
+    /// <summary>Self-learn: nudge domain stress when user makes a decision in that area.</summary>
+    public async Task NudgeDomainStressAsync(string userId, LifeDomainType domain, double delta = 5)
+    {
+        var d = await GetDomainStateAsync(userId, domain);
+        d.StressLevel = Math.Min(95, Math.Max(0, d.StressLevel + delta));
+        d.LastUpdated = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+    }
+
+    /// <summary>Update domain state (emotional score, stress, description) for self-reporting.</summary>
+    public async Task<LifeDomain> UpdateDomainStateAsync(string userId, LifeDomainType domain,
+        double? emotionalScore = null, double? stressLevel = null, string? currentState = null)
+    {
+        var d = await GetDomainStateAsync(userId, domain);
+        if (emotionalScore.HasValue) d.EmotionalScore = Math.Min(100, Math.Max(0, emotionalScore.Value));
+        if (stressLevel.HasValue) d.StressLevel = Math.Min(100, Math.Max(0, stressLevel.Value));
+        if (currentState != null) d.CurrentState = currentState.Length > 500 ? currentState.Substring(0, 500) : currentState;
+        d.LastUpdated = DateTime.UtcNow;
+        d.RiskLevel = d.StressLevel > 70 || d.EmotionalScore < 40 ? "AtRisk" : d.EmotionalScore >= 70 ? "Healthy" : "AtRisk";
+        await _context.SaveChangesAsync();
+        return d;
+    }
+
     public async Task<DomainHealthReport> GetDomainHealthReportAsync(string userId)
     {
         var domains = await _context.LifeDomains

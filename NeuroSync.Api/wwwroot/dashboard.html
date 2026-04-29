@@ -158,6 +158,10 @@
             <section class="dashboard-row">
                 <div class="widget decisions-widget">
                     <h3>🤔 Recent Decisions</h3>
+                    <div class="add-decision" style="margin-bottom:8px;">
+                        <input id="newDecisionText" type="text" placeholder="e.g. Should I change jobs?" style="width:100%;max-width:220px;padding:6px 8px;margin-right:6px;border-radius:6px;border:1px solid #ccc;" />
+                        <button id="addDecisionBtn" type="button" style="padding:6px 12px;border-radius:6px;border:1px solid #7c3aed;background:#7c3aed;color:#fff;cursor:pointer;">Add decision</button>
+                    </div>
                     <div id="recentDecisions" class="decisions-list">
                         <p class="empty">No recent decisions</p>
                     </div>
@@ -167,6 +171,30 @@
                     <h3>📖 Your Life Story</h3>
                     <div id="lifeStory" class="story-text">
                         <p class="loading">Generating your story...</p>
+                    </div>
+                    <div class="add-event" style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.1);">
+                        <input id="newEventDesc" type="text" placeholder="What happened? (e.g. Started a new course)" style="width:100%;max-width:200px;padding:6px 8px;margin-right:6px;margin-bottom:6px;border-radius:6px;border:1px solid #ccc;" />
+                        <select id="newEventType" style="padding:6px 8px;margin-right:6px;border-radius:6px;border:1px solid #ccc;">
+                            <option value="0">Trauma</option><option value="1" selected>Growth</option><option value="2">Milestone</option>
+                            <option value="3">Relationship</option><option value="4">Decision</option><option value="5">Crisis</option>
+                        </select>
+                        <button id="addEventBtn" type="button" style="padding:6px 12px;border-radius:6px;border:1px solid #059669;background:#059669;color:#fff;cursor:pointer;">Add event</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Domain quick-adjust -->
+            <section class="dashboard-row">
+                <div class="widget full-width" style="padding:12px;">
+                    <h3 style="margin-bottom:8px;">🎯 Adjust domain (self-report)</h3>
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
+                        <select id="adjustDomain" style="padding:6px 10px;border-radius:6px;border:1px solid #ccc;">
+                            <option value="MentalHealth">Mental</option><option value="Relationships">Relationships</option>
+                            <option value="CareerWork">Career</option><option value="MoneySurvival">Money</option><option value="SelfGrowth">Self</option>
+                        </select>
+                        <label>Score <input id="adjustScore" type="number" min="0" max="100" value="50" style="width:50px;padding:4px;" /></label>
+                        <label>Stress <input id="adjustStress" type="number" min="0" max="100" value="30" style="width:50px;padding:4px;" /></label>
+                        <button id="adjustDomainBtn" type="button" style="padding:6px 12px;border-radius:6px;border:1px solid #6366f1;background:#6366f1;color:#fff;cursor:pointer;">Update</button>
                     </div>
                 </div>
             </section>

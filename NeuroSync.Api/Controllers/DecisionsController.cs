@@ -19,8 +19,25 @@ public class DecisionsController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Get recent decisions (stored for dashboard and self-learning).</summary>
+    [HttpGet("recent")]
+    public async Task<IActionResult> GetRecentDecisions([FromQuery] string? userId = null, [FromQuery] int limit = 10)
+    {
+        try
+        {
+            userId ??= Request.Headers["X-User-Id"].FirstOrDefault() ?? "default";
+            var list = await _decisionService.GetRecentDecisionsAsync(userId, Math.Min(limit, 50));
+            return Ok(list);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading recent decisions");
+            return StatusCode(500, new { error = "Failed to load recent decisions", details = ex.Message });
+        }
+    }
+
     /// <summary>
-    /// Frame and analyze a decision
+    /// Frame and analyze a decision. Stores decision, creates LifeEvent, and nudges related LifeDomain (self-learn).
     /// </summary>
     [HttpPost("frame")]
     public async Task<IActionResult> FrameDecision([FromBody] FrameDecisionRequest request)
@@ -29,6 +46,23 @@ public class DecisionsController : ControllerBase
         {
             var userId = request.UserId ?? Request.Headers["X-User-Id"].FirstOrDefault() ?? "default";
             var decision = await _decisionService.FrameDecisionAsync(userId, request.DecisionText);
+
+            // Self-learn: store as LifeEvent and nudge relevant LifeDomain
+            var memory = HttpContext.RequestServices.GetService<LifeMemoryGraphService>();
+            var domains = HttpContext.RequestServices.GetService<LifeDomainsEngineService>();
+            var affected = MapDecisionTypeToDomain(decision.DecisionType);
+            if (memory != null)
+            {
+                await memory.StoreLifeEventAsync(userId, LifeEventType.Decision,
+                    "Decision: " + (decision.DecisionText.Length > 200 ? decision.DecisionText.Substring(0, 200) + "..." : decision.DecisionText),
+                    emotionalSignificance: 60, lifeImpact: LifeImpactLevel.Medium, affectedDomain: affected,
+                    tags: new List<string> { "decision", decision.DecisionType.ToString().ToLower() });
+            }
+            if (domains != null && affected.HasValue)
+            {
+                await domains.NudgeDomainStressAsync(userId, affected.Value, 5);
+            }
+
             return Ok(decision);
         }
         catch (Exception ex)
@@ -36,6 +70,19 @@ public class DecisionsController : ControllerBase
             _logger.LogError(ex, "Error framing decision");
             return StatusCode(500, new { error = "Failed to frame decision", details = ex.Message });
         }
+    }
+
+    private static LifeDomainType? MapDecisionTypeToDomain(DecisionType t)
+    {
+        return t switch
+        {
+            DecisionType.Career => LifeDomainType.CareerWork,
+            DecisionType.Relationship => LifeDomainType.Relationships,
+            DecisionType.Financial => LifeDomainType.MoneySurvival,
+            DecisionType.Life => LifeDomainType.SelfGrowth,
+            DecisionType.Crisis => LifeDomainType.MentalHealth,
+            _ => null
+        };
     }
 
     /// <summary>

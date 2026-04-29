@@ -39,6 +39,16 @@ public class DecisionIntelligenceEngineService
         return decision;
     }
 
+    /// <summary>Get recent decisions for dashboard and self-learning context.</summary>
+    public async Task<List<Decision>> GetRecentDecisionsAsync(string userId, int limit = 10)
+    {
+        return await _context.Decisions
+            .Where(d => d.UserId == userId)
+            .OrderByDescending(d => d.CreatedAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
     public async Task<DecisionAnalysis> AnalyzeDecisionOptionsAsync(
         string userId, 
         int decisionId, 
@@ -329,9 +339,47 @@ public class DecisionIntelligenceEngineService
 
     private async Task<double> CalculateValueAlignmentAsync(string userId, string optionText)
     {
-        // Would integrate with IdentityProfile to calculate alignment with core values
-        // For now, return a default calculation
-        return 60; // Placeholder
+        var profile = await _context.IdentityProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == userId);
+        if (profile == null)
+            return 55; // No profile: neutral alignment
+
+        var alignment = 50.0;
+        var optionLower = optionText.ToLowerInvariant();
+
+        if (!string.IsNullOrEmpty(profile.CoreValues))
+        {
+            try
+            {
+                var values = JsonSerializer.Deserialize<List<string>>(profile.CoreValues) ?? new List<string>();
+                foreach (var value in values)
+                {
+                    if (string.IsNullOrWhiteSpace(value)) continue;
+                    if (optionLower.Contains(value.ToLowerInvariant()))
+                        alignment += 8;
+                }
+                alignment = Math.Min(95, alignment);
+            }
+            catch { /* ignore parse */ }
+        }
+
+        if (!string.IsNullOrEmpty(profile.LifePurpose))
+        {
+            var purposeWords = profile.LifePurpose.ToLowerInvariant()
+                .Split(new[] { ' ', ',', '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 4)
+                .Distinct()
+                .Take(5);
+            foreach (var word in purposeWords)
+            {
+                if (optionLower.Contains(word))
+                    alignment += 3;
+            }
+            alignment = Math.Min(95, alignment);
+        }
+
+        return Math.Max(0, Math.Min(100, alignment));
     }
 
     private DecisionScenario ModelBestCaseScenario(Decision decision)

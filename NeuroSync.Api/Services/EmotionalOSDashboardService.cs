@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NeuroSync.Api.Data;
+using NeuroSync.Core;
 using NeuroSync.Core.Models;
 using System.Text.Json;
 
@@ -12,17 +13,20 @@ public class EmotionalOSDashboardService
     private readonly ILogger<EmotionalOSDashboardService> _logger;
     private readonly EmotionDetectionService _emotionDetection;
     private readonly ICollapseRiskPredictor? _collapsePredictor;
+    private readonly ConversationMemory? _conversationMemory;
 
     public EmotionalOSDashboardService(
         NeuroSyncDbContext context,
         ILogger<EmotionalOSDashboardService> logger,
         EmotionDetectionService emotionDetection,
-        ICollapseRiskPredictor? collapsePredictor = null)
+        ICollapseRiskPredictor? collapsePredictor = null,
+        ConversationMemory? conversationMemory = null)
     {
         _context = context;
         _logger = logger;
         _emotionDetection = emotionDetection;
         _collapsePredictor = collapsePredictor;
+        _conversationMemory = conversationMemory;
     }
 
     public async Task<DailyEmotionalSummary> GetDailyEmotionalSummaryAsync(string userId, DateTime? date = null)
@@ -91,8 +95,8 @@ public class EmotionalOSDashboardService
         var domainStates = domains.ToDictionary(d => d.Domain.ToString(), d => d.EmotionalScore);
         summary.DomainStates = JsonSerializer.Serialize(domainStates);
 
-        // Generate key insights
-        var insights = GenerateKeyInsights(summary, domains, trend);
+        // Generate key insights (includes ConversationMemory: concerning patterns, most common emotion)
+        var insights = GenerateKeyInsights(userId, summary, domains, trend);
         summary.KeyInsights = JsonSerializer.Serialize(insights);
 
         summary.UpdatedAt = DateTime.UtcNow;
@@ -191,8 +195,20 @@ public class EmotionalOSDashboardService
 
     private async Task<(string Emotion, double Confidence)> CalculateCurrentEmotionAsync(string userId)
     {
-        // Get most recent emotion from conversation memory
-        // For now, use a placeholder - would integrate with ConversationMemory service
+        if (_conversationMemory != null)
+        {
+            var ctx = _conversationMemory.GetOrCreateContext(userId);
+            var last = ctx.History.LastOrDefault();
+            if (last?.DetectedEmotion != null)
+            {
+                var em = last.DetectedEmotion.Emotion.ToString();
+                var conf = (double)last.DetectedEmotion.Confidence;
+                return (em, conf);
+            }
+            if (ctx.LastEmotion.HasValue)
+                return (ctx.LastEmotion.Value.ToString(), 0.7);
+        }
+        await Task.CompletedTask;
         return ("Neutral", 0.5);
     }
 
@@ -221,24 +237,38 @@ public class EmotionalOSDashboardService
 
     private async Task<(double StressLevel, double MentalLoad, double EnergyLevel)> CalculateStressAndMentalLoadAsync(string userId)
     {
-        // Simple calculation - would be enhanced with actual data analysis
         var domains = await _context.LifeDomains
             .Where(d => d.UserId == userId)
             .ToListAsync();
 
         var avgDomainStress = domains.Any() ? domains.Average(d => d.StressLevel) : 50;
-        var mentalLoad = Math.Min(100, avgDomainStress * 1.5);
+        var concerningPattern = _conversationMemory?.HasConcerningPattern(userId) == true;
+        if (concerningPattern)
+        {
+            avgDomainStress = Math.Min(100, avgDomainStress + 5);
+        }
+        var mentalLoad = Math.Min(100, avgDomainStress * 1.5 + (concerningPattern ? 5 : 0));
         var energyLevel = Math.Max(0, 100 - mentalLoad);
 
         return (avgDomainStress, mentalLoad, energyLevel);
     }
 
     private List<string> GenerateKeyInsights(
+        string userId,
         DailyEmotionalSummary summary,
         List<LifeDomain> domains,
         (string Trend, double AverageScore) trend)
     {
         var insights = new List<string>();
+
+        if (_conversationMemory != null)
+        {
+            if (_conversationMemory.HasConcerningPattern(userId))
+                insights.Add("💜 Recurring difficult emotions noticed. It's okay to seek support.");
+            var mostCommon = _conversationMemory.GetMostCommonEmotion(userId);
+            if (mostCommon != null && mostCommon.Frequency >= 3)
+                insights.Add($"📊 You often feel {mostCommon.Emotion.ToString().ToLower()}. We can explore what helps.");
+        }
 
         if (summary.BurnoutRisk > 60)
         {

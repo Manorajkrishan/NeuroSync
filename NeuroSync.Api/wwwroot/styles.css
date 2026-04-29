@@ -718,9 +718,7 @@ body.emotion-happy {
 
 body.emotion-sad {
     background: linear-gradient(135deg, #0f172a 0%, #0f1a2a 100%);
-}
-
-body.emotion-anxious {
+}body.emotion-anxious {
     background: linear-gradient(135deg, #0f172a 0%, #1a0f1a 100%);
 }body.emotion-calm {
     background: linear-gradient(135deg, #0f172a 0%, #0f2a1a 100%);

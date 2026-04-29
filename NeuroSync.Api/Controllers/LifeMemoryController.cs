@@ -19,6 +19,23 @@ public class LifeMemoryController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>Get recent life events.</summary>
+    [HttpGet("events")]
+    public async Task<IActionResult> GetRecentEvents([FromQuery] string? userId = null, [FromQuery] int limit = 20)
+    {
+        try
+        {
+            userId ??= Request.Headers["X-User-Id"].FirstOrDefault() ?? "default";
+            var events = await _memoryService.GetRecentEventsAsync(userId, Math.Min(limit, 50));
+            return Ok(events);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading recent events");
+            return StatusCode(500, new { error = "Failed to load events", details = ex.Message });
+        }
+    }
+
     /// <summary>
     /// Store a life event
     /// </summary>

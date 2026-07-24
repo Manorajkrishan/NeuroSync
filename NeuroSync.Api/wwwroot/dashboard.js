@@ -1,7 +1,11 @@
 // Human OS Dashboard JavaScript
 
 const API_BASE_URL = window.location.origin;
-let currentUserId = sessionStorage.getItem('neuroSync_userId') || 'default';
+let currentUserId = localStorage.getItem('neuroSync_userId') || sessionStorage.getItem('neuroSync_userId') || 'default';
+if (currentUserId && currentUserId !== 'default') {
+    localStorage.setItem('neuroSync_userId', currentUserId);
+    sessionStorage.setItem('neuroSync_userId', currentUserId);
+}
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {

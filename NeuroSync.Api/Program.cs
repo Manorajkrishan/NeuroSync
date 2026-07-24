@@ -84,6 +84,9 @@ builder.Services.AddSingleton<ModelService>(sp =>
 builder.Services.AddSingleton<PredictionCache>();
 
 // Add Emotion Detection Service (uses the loaded model with caching)
+builder.Services.AddSingleton<EmotionUnderstandingService>();
+builder.Services.AddSingleton<CognitiveInterpretationService>();
+
 builder.Services.AddSingleton<EmotionDetectionService>(sp =>
 {
     try
@@ -99,8 +102,10 @@ builder.Services.AddSingleton<EmotionDetectionService>(sp =>
         
         var cache = sp.GetService<PredictionCache>();
         logger.LogInformation("Prediction cache initialized for faster responses");
+
+        var understanding = sp.GetService<EmotionUnderstandingService>();
         
-        return new EmotionDetectionService(model, logger, cache);
+        return new EmotionDetectionService(model, logger, cache, understanding);
     }
     catch (Exception ex)
     {
@@ -196,6 +201,10 @@ builder.Services.AddSingleton<VoiceService>();
 
 // Add User Profile Service (Baby Learning System)
 builder.Services.AddSingleton<UserProfileService>();
+builder.Services.AddSingleton<BestFriendCompanionService>();
+builder.Services.AddSingleton<AdaptivePersonalityService>();
+builder.Services.AddSingleton<DeviceSyncService>();
+builder.Services.AddSingleton<FacialWellbeingService>();
 
 // Add Person Memory
 builder.Services.AddSingleton<PersonMemory>();
@@ -247,7 +256,8 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var logger = sp.GetRequiredService<ILogger<DecisionEngine>>();
     var conversationMemory = sp.GetService<ConversationMemory>();
     var emotionalIntelligence = sp.GetService<EmotionalIntelligence>();
-    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence);
+    var companion = sp.GetService<BestFriendCompanionService>();
+    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion);
 });
 
 // Add Advanced Action Orchestrator

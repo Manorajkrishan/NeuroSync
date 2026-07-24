@@ -188,6 +188,12 @@ async function detectFacialExpression(video, canvas) {
         const detection = detections[0];
         const expressions = detection.expressions;
         
+        // Eye contact + face motion from landmarks
+        let cues = { eyeContact: 0.5, faceMotion: 0, gaze: 'unknown', engagement: 'steady', notes: '' };
+        if (window.NeuroSyncFaceCues && detection.landmarks) {
+            cues = window.NeuroSyncFaceCues.analyzeFaceCues(detection.landmarks, detection.detection?.box);
+        }
+
         // Find the expression with highest confidence
         let maxExpression = null;
         let maxConfidence = 0;
@@ -206,14 +212,13 @@ async function detectFacialExpression(video, canvas) {
         updateFacialEmotionDisplay({
             emotion: emotion,
             confidence: maxConfidence,
-            expression: maxExpression
+            expression: maxExpression,
+            cues
         });
         
         // Send to server for automatic comfort response
-        // Lower threshold (0.5) for more responsive detection
-        // System will automatically provide comfort without user typing
         if (maxConfidence > 0.5) {
-            sendFacialEmotionToServer(emotion, maxConfidence);
+            sendFacialEmotionToServer(emotion, maxConfidence, cues);
         }
         
         // Draw on canvas (optional visualization)
@@ -254,12 +259,16 @@ function updateFacialEmotionDisplay(result) {
     badge.className = `facial-emotion-badge ${result.emotion}`;
     
     const confidencePercent = (result.confidence * 100).toFixed(1);
-    confidence.textContent = `Confidence: ${confidencePercent}%`;
-    
-    // Show real-time indicator for active detection
-    if (isDetecting && result.confidence > 0.5) {
-        confidence.textContent += ' • Real-time monitoring active';
+    let line = `Confidence: ${confidencePercent}%`;
+    if (result.cues) {
+        const eyePct = Math.round((result.cues.eyeContact || 0) * 100);
+        line += ` · Eyes ${eyePct}% · ${result.cues.gaze?.replace(/_/g, ' ') || ''}`;
+        if (result.cues.engagement) line += ` · ${result.cues.engagement.replace(/_/g, ' ')}`;
     }
+    if (isDetecting && result.confidence > 0.5) {
+        line += ' · Watching for your wellbeing';
+    }
+    confidence.textContent = line;
 }
 
 // Track last emotion sent to avoid spam
@@ -267,11 +276,12 @@ let lastEmotionSent = null;
 let lastEmotionTime = 0;
 
 // Send facial emotion to server for processing - real-time automatic response
-async function sendFacialEmotionToServer(emotion, confidence) {
+async function sendFacialEmotionToServer(emotion, confidence, cues) {
     const now = Date.now();
     
-    // Only send if confidence is reasonable
-    if (confidence < 0.5) {
+    // Only send if confidence is reasonable OR strong engagement cues
+    const strongCues = cues && (cues.eyeContact < 0.3 || cues.faceMotion > 0.55 || cues.gaze === 'eyes_closed_or_down');
+    if (confidence < 0.5 && !strongCues) {
         return;
     }
     
@@ -316,7 +326,12 @@ async function sendFacialEmotionToServer(emotion, confidence) {
                 confidence: confidence,
                 userId: userId,
                 source: 'facial_expression',
-                realTime: true // Flag for real-time automatic response
+                realTime: true,
+                eyeContactScore: cues?.eyeContact,
+                faceMotionScore: cues?.faceMotion,
+                gazeState: cues?.gaze,
+                engagement: cues?.engagement,
+                cueNotes: cues?.notes
             })
         });
         

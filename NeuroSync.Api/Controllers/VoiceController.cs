@@ -71,20 +71,22 @@ public class VoiceController : ControllerBase
     /// Clones a voice from an audio sample.
     /// </summary>
     [HttpPost("clone")]
-    public async Task<IActionResult> CloneVoice(
-        [FromForm] string userId,
-        [FromForm] string personName,
-        [FromForm] IFormFile audioFile)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CloneVoice([FromForm] CloneVoiceFormRequest request)
     {
-        if (audioFile == null || audioFile.Length == 0)
+        if (request.AudioFile == null || request.AudioFile.Length == 0)
         {
             return BadRequest(new { error = "Audio file is required" });
         }
 
-        if (string.IsNullOrWhiteSpace(personName))
+        if (string.IsNullOrWhiteSpace(request.PersonName))
         {
             return BadRequest(new { error = "Person name is required" });
         }
+
+        var userId = request.UserId ?? "default";
+        var personName = request.PersonName;
+        var audioFile = request.AudioFile;
 
         try
         {
@@ -151,4 +153,14 @@ public class SpeakRequest
     public string? UserId { get; set; }
     public string? PersonName { get; set; }
     public string? VoiceId { get; set; }
+}
+
+/// <summary>
+/// Multipart form request for voice cloning (required for Swagger IFormFile support).
+/// </summary>
+public class CloneVoiceFormRequest
+{
+    public string? UserId { get; set; }
+    public string PersonName { get; set; } = string.Empty;
+    public IFormFile AudioFile { get; set; } = null!;
 }

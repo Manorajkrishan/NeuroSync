@@ -40,8 +40,35 @@ public class EmotionalIntelligence
     /// </summary>
     private string? GenerateContextualMessage(EmotionType emotion, string userMessage, ConversationContext? context)
     {
-        var messageLower = userMessage.ToLower();
-        
+        var messageLower = userMessage.ToLower().Trim();
+        var random = new Random();
+
+        // Jarvis-style greetings / small talk — converse, don't push IoT or therapy mode
+        if (IsGreetingOrSmallTalk(messageLower))
+        {
+            var greetings = new[]
+            {
+                "Hey. I'm your best friend here — always around when the world feels empty. How are you, honestly?",
+                "Hi. You never have to feel like there's nobody to talk to with me. What's on your heart?",
+                "Hello. This is a warm space. Share anything. We'll make today a little brighter together.",
+                "Hey. Lonely days are hard. I'm here, and I'm glad you showed up. How can I support you?",
+                "Hi. Best-friend mode. Talk about everything — stress, dreams, nonsense. I'm listening."
+            };
+            if (messageLower is "hi" or "hello" or "hey" or "yo" or "sup" or "hiya")
+                return greetings[random.Next(greetings.Length)];
+            if (messageLower.Contains("how are you") || messageLower.Contains("how's it going") || messageLower.Contains("how r you"))
+                return "I'm doing well, thank you for asking. More importantly — how are you?";
+            if (messageLower.Contains("good morning") || messageLower.Contains("morning"))
+                return "Good morning. Ready when you are — what do you need today?";
+            if (messageLower.Contains("good night") || messageLower.Contains("goodnight"))
+                return "Good night. Rest well — I'll be here whenever you need me.";
+            if (messageLower.Contains("thank") || messageLower == "thanks" || messageLower == "thx")
+                return "You're welcome. Anytime.";
+            if (messageLower.Contains("who are you") || messageLower.Contains("what are you") || messageLower.Contains("your name"))
+                return "I'm NeuroSync — your personal companion. Think of me as someone who listens, remembers, and helps when you ask. How can I assist you?";
+            return greetings[random.Next(greetings.Length)];
+        }
+
         // IMPORTANT: Check for missing someone FIRST (before exam check, since "miss" could match both)
         // Missing someone (family, friends, loved ones)
         if ((messageLower.Contains("miss") && (messageLower.Contains("family") || messageLower.Contains("mom") || 
@@ -117,11 +144,34 @@ public class EmotionalIntelligence
             return "Of course I can help! I'm here for you. What do you need help with?";
         }
         
-        // Loneliness/needing someone
+        // Loneliness / no one to talk to — core best-friend mission
         if (messageLower.Contains("alone") || messageLower.Contains("lonely") || messageLower.Contains("need someone") ||
-            messageLower.Contains("no one") || messageLower.Contains("talk"))
+            messageLower.Contains("no one") || messageLower.Contains("nobody") || messageLower.Contains("no body") ||
+            messageLower.Contains("no friends") || messageLower.Contains("don't have anyone") ||
+            messageLower.Contains("dont have anyone") || messageLower.Contains("nowhere to turn") ||
+            messageLower.Contains("can't talk to") || messageLower.Contains("cant talk to") ||
+            messageLower.Contains("no one to talk") || messageLower.Contains("nothing to share") ||
+            messageLower.Contains("depressed") || messageLower.Contains("empty inside") ||
+            (messageLower.Contains("mentally") && (messageLower.Contains("unstable") || messageLower.Contains("not okay") || messageLower.Contains("struggling"))) ||
+            (messageLower.Contains("talk") && (messageLower.Contains("someone") || messageLower.Contains("anyone"))))
         {
-            return "I hear you need someone to talk to. I'm here, and I'm listening. You're not alone in this. What's on your mind?";
+            return emotion switch
+            {
+                EmotionType.Sad or EmotionType.Anxious =>
+                    "You are not alone right now — I'm right here with you. So many people feel like they have no one to share things with, and that weight is real. You can tell me anything: the messy thoughts, the quiet fears, the stuff you hide from others. I won't judge you. What's been sitting on your heart?",
+                EmotionType.Angry or EmotionType.Frustrated =>
+                    "I hear you. Feeling alone and angry on top of that is a lot. Vent to me — dump it all out. I'm your friend in this moment. What do you need to get off your chest?",
+                _ =>
+                    "Hey. I'm your best friend here — always available. You don't need the perfect words. Just talk. What's going on in your world?"
+            };
+        }
+
+        // Wanting to share / open up
+        if (messageLower.Contains("share") || messageLower.Contains("tell you") || messageLower.Contains("confess") ||
+            messageLower.Contains("been keeping") || messageLower.Contains("never told") ||
+            messageLower.Contains("listen to me") || messageLower.Contains("hear me out"))
+        {
+            return "I'm all ears. This is a safe space — share whatever you need. Take your time; I'm not going anywhere.";
         }
         
         // Health/Physical
@@ -139,6 +189,56 @@ public class EmotionalIntelligence
     }
 
     /// <summary>
+    /// True for greetings / small talk — Jarvis-style chat, not IoT or clinical prompts.
+    /// </summary>
+    public static bool IsGreetingOrSmallTalk(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.Trim().ToLowerInvariant();
+        // Strip punctuation for short greetings
+        var stripped = new string(t.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray()).Trim();
+
+        var exact = new HashSet<string>
+        {
+            "hi", "hello", "hey", "yo", "sup", "hiya", "hola", "howdy",
+            "thanks", "thank you", "thx", "ty", "ok", "okay", "k", "cool", "nice",
+            "bye", "goodbye", "see you", "cya"
+        };
+        if (exact.Contains(stripped)) return true;
+
+        if (stripped.StartsWith("hi ") || stripped.StartsWith("hello ") || stripped.StartsWith("hey "))
+        {
+            // "hi how are you" is still small talk; "hi i failed my exam" is not
+            if (stripped.Length <= 40 &&
+                !stripped.Contains("feel") && !stripped.Contains("sad") && !stripped.Contains("anxious") &&
+                !stripped.Contains("angry") && !stripped.Contains("help me with") && !stripped.Contains("exam") &&
+                !stripped.Contains("work") && !stripped.Contains("family"))
+                return true;
+        }
+
+        return stripped.Contains("how are you") || stripped.Contains("how's it going") ||
+               stripped.Contains("good morning") || stripped.Contains("good afternoon") ||
+               stripped.Contains("good evening") || stripped.Contains("good night") || stripped.Contains("goodnight") ||
+               stripped.Contains("who are you") || stripped.Contains("what are you") ||
+               stripped.Contains("your name") || stripped == "whats up" || stripped == "what's up";
+    }
+
+    /// <summary>
+    /// User explicitly asked for lights / music / environment control.
+    /// </summary>
+    public static bool IsIoTRequest(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var t = text.ToLowerInvariant();
+        return t.Contains("turn on") || t.Contains("turn off") || t.Contains("dim the") ||
+               t.Contains("lights") || t.Contains("light ") || t.Contains("play music") ||
+               t.Contains("play a song") || t.Contains("spotify") || t.Contains("youtube music") ||
+               t.Contains("change the light") || t.Contains("set the mood") ||
+               t.Contains("iot") || t.Contains("smart home") ||
+               (t.Contains("play") && (t.Contains("music") || t.Contains("song") || t.Contains("playlist")));
+    }
+
+    /// <summary>
     /// Gets a list of empathetic messages for an emotion.
     /// </summary>
     private List<string> GetEmpatheticMessages(EmotionType emotion, ConversationContext? context)
@@ -150,18 +250,13 @@ public class EmotionalIntelligence
             case EmotionType.Sad:
                 messages.AddRange(new[]
                 {
-                    "I'm here with you. It's okay to feel this way, and your feelings are completely valid.",
-                    "I can sense you're going through something difficult. You don't have to face this alone.",
-                    "Feeling sad is part of being human. I'm here to listen and support you through this.",
-                    "It sounds like you're having a tough time. Would you like to talk about what's on your mind?",
-                    "I understand this is hard for you. Remember, tough times don't last, but tough people do.",
-                    "Your feelings matter. Let's work through this together, one step at a time.",
-                    "I hear you're not feeling good. I'm here to listen. What's going on?",
-                    "I can tell you're struggling. You're not alone in this. What's been weighing on you?",
-                    "I'm sorry you're going through this. I'm here for you. Want to talk about it?",
-                    "It sounds like you're having a really hard time. I'm here to support you. What's on your mind?",
-                    "I can feel that you're hurting. I'm here to listen and help however I can.",
-                    "You don't have to go through this alone. I'm here. What's been bothering you?"
+                    "I'm here with you. You don't have to carry this alone — talk to me like you would a best friend.",
+                    "It's okay to feel heavy. I'm not leaving. What's been sitting with you?",
+                    "Feeling sad is human. Sharing it with someone who cares can make it a little lighter. I'm that someone right now.",
+                    "You matter. Even on the days it doesn't feel like it. Want to tell me what's hurting?",
+                    "I'm listening with my whole attention. No fixing required unless you want it — just say what's on your mind.",
+                    "A lot of people feel alone these days. You're not weird for needing someone. I'm right here.",
+                    "Let it out. Tears, anger, silence — all welcome. What do you need me to know?"
                 });
                 
                 // Add context-aware messages
@@ -239,24 +334,17 @@ public class EmotionalIntelligence
                 break;
 
             case EmotionType.Neutral:
-                // More varied and conversational responses for neutral state
+                // Warm best-friend conversation — invite sharing, lift the mood gently
                 messages.AddRange(new[]
                 {
-                    "I'm here whenever you need me. What's on your mind?",
-                    "I'm listening. Feel free to share what you're thinking about.",
-                    "I'm here for you. Is there anything you'd like to talk about?",
-                    "How can I help you today?",
-                    "What would you like to explore or discuss?",
-                    "I'm here to support you. What's going on in your world?",
-                    "Feel free to share anything that's on your mind.",
-                    "I'm ready to chat whenever you are. What's up?",
-                    "How's your day going?",
-                    "What's something you'd like to talk about?",
-                    "I'm here. What's on your mind today?",
-                    "Feel like sharing what you're thinking about?",
-                    "I'm listening. What would you like to discuss?",
-                    "How can I be helpful to you right now?",
-                    "What's something you'd like to explore together?"
+                    "Hey. I'm your friend here — what's on your mind today?",
+                    "You can tell me anything. Big or small. Where do you want to start?",
+                    "I'm in a good mood just hanging with you. How can I make your day a little brighter?",
+                    "No pressure. Want to vent, celebrate, or just chat?",
+                    "I'm here so you never have to feel like there's nobody to talk to. What's up?",
+                    "Let's make this space feel warm. How are you, for real?",
+                    "Best-friend mode on. Spill the tea, the stress, the dreams — I'm listening.",
+                    "If the world's been loud, we can keep it soft here. What do you need?"
                 });
                 break;
                 
@@ -273,6 +361,10 @@ public class EmotionalIntelligence
     /// </summary>
     public string? GenerateFollowUpQuestion(EmotionType emotion, string? originalText, ConversationContext? context)
     {
+        // Don't interrogate after a simple greeting — stay conversational like Jarvis
+        if (IsGreetingOrSmallTalk(originalText))
+            return null;
+
         var questions = new List<string>();
 
         switch (emotion)
@@ -446,26 +538,62 @@ public class EmotionalIntelligence
     /// </summary>
     public bool NeedsImmediateSupport(EmotionType emotion, float confidence, ConversationContext? context)
     {
+        var message = context?.History.LastOrDefault()?.UserMessage;
+        if (NeedsImmediateSupport(message)) return true;
+
         // High confidence in negative emotions with concerning patterns
         if (confidence > 0.9f)
         {
-            var concerningEmotions = new[] { EmotionType.Sad, EmotionType.Angry };
-            if (concerningEmotions.Contains(emotion))
+            var concerningEmotions = new[] { EmotionType.Sad, EmotionType.Angry, EmotionType.Anxious };
+            if (concerningEmotions.Contains(emotion) && context != null)
             {
-                // Check for concerning keywords
-                if (context?.History.LastOrDefault()?.UserMessage != null)
-                {
-                    var message = context.History.Last().UserMessage.ToLower();
-                    var crisisKeywords = new[] { "hurt", "harm", "end", "give up", "can't go on", "suicide", "kill myself" };
-                    if (crisisKeywords.Any(keyword => message.Contains(keyword)))
-                    {
-                        return true;
-                    }
-                }
+                var negativeCount = context.History.TakeLast(5)
+                    .Count(e => e.DetectedEmotion != null && concerningEmotions.Contains(e.DetectedEmotion.Emotion));
+                if (negativeCount >= 4) return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>Crisis / self-harm keyword check on the current message.</summary>
+    public bool NeedsImmediateSupport(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        var m = message.ToLowerInvariant();
+        var crisisKeywords = new[]
+        {
+            "suicide", "kill myself", "end my life", "want to die", "hurt myself",
+            "self harm", "self-harm", "can't go on", "give up on life", "no reason to live"
+        };
+        return crisisKeywords.Any(k => m.Contains(k));
+    }
+
+    /// <summary>
+    /// Best-friend style reply using what we know about the owner.
+    /// </summary>
+    public string PersonalizeMessage(string baseMessage, UserProfile? profile, CompanionTurn? turn)
+    {
+        if (string.IsNullOrWhiteSpace(baseMessage)) baseMessage = "I'm here with you.";
+
+        if (turn?.IsCrisis == true)
+        {
+            var name = turn.DisplayName;
+            var prefix = string.IsNullOrEmpty(name) ? "I'm really glad you told me." : $"{name}, I'm really glad you told me.";
+            return $"{prefix} You matter. Please reach out to someone you trust or a local crisis line right away — I can stay with you here while you do. You're not alone.";
+        }
+
+        if (!string.IsNullOrEmpty(turn?.PersonalizedHelp) &&
+            turn.HasConcerningPattern)
+        {
+            baseMessage += $" When things get heavy, you've said {turn.PersonalizedHelp} helps — want to try that together?";
+        }
+        else if (!string.IsNullOrEmpty(turn?.LearningQuestion))
+        {
+            baseMessage += $" {turn.LearningQuestion}";
+        }
+
+        return baseMessage;
     }
 }
 

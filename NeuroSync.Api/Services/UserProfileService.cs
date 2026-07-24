@@ -110,75 +110,131 @@ public class UserProfileService
     }
 
     /// <summary>
-    /// Extracts information from user message (like baby learning from conversation).
+    /// Extracts information from user message (like a best friend remembering what matters).
     /// </summary>
     public void LearnFromConversation(string userId, string userMessage, EmotionType? emotion = null)
     {
         var profile = GetOrCreateProfile(userId);
         var learned = false;
-        
-        // Learn name if mentioned
+        var lower = userMessage.ToLowerInvariant();
+
+        // Learn name
         if (string.IsNullOrEmpty(profile.PreferredName))
         {
-            // Simple name extraction (can be improved)
-            var namePatterns = new[] { "my name is", "i'm", "call me", "i am" };
+            var namePatterns = new[] { "my name is", "call me", "i'm ", "i am " };
             foreach (var pattern in namePatterns)
             {
-                if (userMessage.ToLower().Contains(pattern))
+                var idx = lower.IndexOf(pattern, StringComparison.Ordinal);
+                if (idx < 0) continue;
+                var after = userMessage[(idx + pattern.Length)..].Trim();
+                var name = after.Split(new[] { ' ', '.', ',', '!', '?', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                if (!string.IsNullOrEmpty(name) && name.Length is >= 2 and < 30 &&
+                    !new[] { "feeling", "sad", "happy", "tired", "not", "just", "really", "so", "a", "the" }.Contains(name.ToLowerInvariant()))
                 {
-                    var parts = userMessage.Split(new[] { pattern }, StringSplitOptions.None);
-                    if (parts.Length > 1)
-                    {
-                        var name = parts[1].Trim().Split(' ', '.', ',', '!', '?')[0];
-                        if (name.Length > 0 && name.Length < 30)
-                        {
-                            profile.PreferredName = name;
-                            learned = true;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Learn preferences from conversation
-        if (userMessage.ToLower().Contains("i like") || userMessage.ToLower().Contains("i love"))
-        {
-            // Extract what they like
-            var parts = userMessage.ToLower().Split(new[] { "i like", "i love" }, StringSplitOptions.None);
-            if (parts.Length > 1)
-            {
-                var thing = parts[1].Trim().Split('.', ',', '!', '?')[0].Trim();
-                if (thing.Length > 0 && thing.Length < 50)
-                {
-                    profile.ThingsThatMakeHappy.Add(thing);
+                    profile.PreferredName = char.ToUpperInvariant(name[0]) + name[1..];
+                    profile.UserName ??= profile.PreferredName;
                     learned = true;
+                    break;
                 }
             }
         }
-        
-        // Learn what helps
-        if (userMessage.ToLower().Contains("helps me") || userMessage.ToLower().Contains("makes me feel better"))
+
+        // Likes / loves → happiness + activities
+        foreach (var cue in new[] { "i like ", "i love ", "i enjoy ", "i'm into " })
         {
-            var parts = userMessage.ToLower().Split(new[] { "helps me", "makes me feel better" }, StringSplitOptions.None);
-            if (parts.Length > 1)
+            var idx = lower.IndexOf(cue, StringComparison.Ordinal);
+            if (idx < 0) continue;
+            var thing = ExtractPhrase(userMessage, idx + cue.Length);
+            if (thing == null) continue;
+            AddUnique(profile.ThingsThatMakeHappy, thing);
+            AddUnique(profile.FavoriteActivities, thing);
+            learned = true;
+        }
+
+        // Music
+        if (lower.Contains("music") || lower.Contains("song") || lower.Contains("playlist"))
+        {
+            foreach (var cue in new[] { "listen to ", "i like ", "i love " })
             {
-                var thing = parts[1].Trim().Split('.', ',', '!', '?')[0].Trim();
-                if (thing.Length > 0 && thing.Length < 50)
-                {
-                    profile.ThingsThatHelp.Add(thing);
-                    learned = true;
-                }
+                var idx = lower.IndexOf(cue, StringComparison.Ordinal);
+                if (idx < 0) continue;
+                var thing = ExtractPhrase(userMessage, idx + cue.Length);
+                if (thing != null) { AddUnique(profile.MusicPreferences, thing); learned = true; }
             }
         }
-        
+
+        // What helps when down
+        foreach (var cue in new[] { "helps me", "makes me feel better", "makes me better", "calms me", "cheers me up" })
+        {
+            if (!lower.Contains(cue)) continue;
+            // Prefer the part before "helps me" ("walking helps me")
+            var before = lower.Split(new[] { cue }, StringSplitOptions.None)[0].Trim();
+            var candidate = before.Split(' ').Reverse().Take(4).Reverse();
+            var phrase = string.Join(' ', candidate).Trim();
+            if (phrase.Length is >= 2 and < 60)
+            {
+                AddUnique(profile.ThingsThatHelp, phrase);
+                if (emotion.HasValue)
+                {
+                    var eKey = emotion.Value.ToString().ToLowerInvariant();
+                    if (!profile.WhatHelpsWhen.ContainsKey(eKey))
+                        profile.WhatHelpsWhen[eKey] = new List<string>();
+                    AddUnique(profile.WhatHelpsWhen[eKey], phrase);
+                }
+                learned = true;
+            }
+        }
+
+        // Triggers / stress sources
+        foreach (var cue in new[] { "stresses me", "triggers me", "makes me anxious", "makes me sad", "i hate ", "can't stand " })
+        {
+            var idx = lower.IndexOf(cue, StringComparison.Ordinal);
+            if (idx < 0) continue;
+            var thing = ExtractPhrase(userMessage, idx + cue.Length);
+            if (thing != null) { AddUnique(profile.Triggers, thing); learned = true; }
+        }
+
+        // Habit / routine hints
+        if (lower.Contains("every morning") || lower.Contains("i usually") || lower.Contains("my routine"))
+        {
+            var snippet = userMessage.Length > 80 ? userMessage[..80] : userMessage;
+            profile.Routines["mentioned"] = snippet;
+            learned = true;
+        }
+
+        // Communication style
+        if (userMessage.Length < 40) profile.PrefersShortMessages = true;
+        if (userMessage.Contains(':') || userMessage.Any(c => c > 127)) profile.PrefersEmojis = true;
+        if (lower.Contains("lol") || lower.Contains("haha") || lower.Contains("bro") || lower.Contains("dude"))
+            profile.CommunicationStyle = "casual";
+
         if (learned)
         {
             profile.LastLearningUpdate = DateTime.UtcNow;
             UpdateLearningStage(profile);
             SaveProfile(profile);
+            _logger.LogInformation("Learned more about owner {UserId} (stage {Stage})", userId, profile.LearningStage);
         }
     }
+
+    private static string? ExtractPhrase(string text, int start)
+    {
+        if (start >= text.Length) return null;
+        var rest = text[start..].Trim();
+        var cut = rest.Split(new[] { '.', '!', '?', ',', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(cut) || cut.Length > 60) return null;
+        return cut;
+    }
+
+    private static void AddUnique(List<string> list, string item)
+    {
+        if (list.Any(x => x.Equals(item, StringComparison.OrdinalIgnoreCase))) return;
+        list.Add(item);
+        if (list.Count > 20) list.RemoveAt(0);
+    }
+
+    /// <summary>Public save for companion turn updates.</summary>
+    public void SaveProfilePublic(UserProfile profile) => SaveProfile(profile);
 
     /// <summary>
     /// Gets a friendly greeting based on what the AI knows about the user.

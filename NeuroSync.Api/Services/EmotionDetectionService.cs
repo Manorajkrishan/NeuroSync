@@ -13,15 +13,18 @@ public class EmotionDetectionService
     private readonly EmotionPredictionService _predictionService;
     private readonly ILogger<EmotionDetectionService> _logger;
     private readonly PredictionCache? _cache;
+    private readonly EmotionUnderstandingService? _understanding;
 
     public EmotionDetectionService(
         ITransformer model, 
         ILogger<EmotionDetectionService> logger,
-        PredictionCache? cache = null)
+        PredictionCache? cache = null,
+        EmotionUnderstandingService? understanding = null)
     {
         _predictionService = new EmotionPredictionService(model);
         _logger = logger;
         _cache = cache;
+        _understanding = understanding;
     }
 
     public EmotionResult DetectEmotion(string text)
@@ -34,32 +37,41 @@ public class EmotionDetectionService
                 throw new InvalidOperationException("Prediction service is not initialized");
             }
 
-            // Check cache first for faster response
+            // Don't use cache for understanding path — we refine every time
+            // (cache key would miss intensity/cause). Still use ML cache internally if needed.
+            EmotionResult mlResult;
             if (_cache != null)
             {
                 var cached = _cache.GetCached(text);
                 if (cached != null)
                 {
-                    _logger.LogDebug($"Cache hit for: {text.Substring(0, Math.Min(50, text.Length))}...");
-                    return cached;
+                    mlResult = new EmotionResult(cached.Emotion, cached.Confidence, text);
+                }
+                else
+                {
+                    mlResult = _predictionService.Predict(text);
+                    _cache.Cache(text, mlResult);
                 }
             }
+            else
+            {
+                mlResult = _predictionService.Predict(text);
+            }
 
-            // Predict using model
-            var result = _predictionService.Predict(text);
-            
-            // Cache the result for faster future responses
-            _cache?.Cache(text, result);
-            
-            _logger.LogInformation($"Emotion detected: {result.Emotion} with confidence: {result.Confidence:P2}");
-            return result;
+            // Deep understanding layer (best-friend reading of emotion)
+            var understood = _understanding != null
+                ? _understanding.Understand(mlResult, text)
+                : mlResult;
+
+            _logger.LogInformation(
+                "Emotion: {Emotion} ({Confidence:P0}, {Intensity}) — {Understood}",
+                understood.Emotion, understood.Confidence, understood.Intensity, understood.UnderstoodAs);
+            return understood;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error detecting emotion: {Message}", ex.Message);
-            _logger.LogError(ex, "Inner exception: {InnerException}", ex.InnerException?.Message);
-            _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-            throw; // Re-throw to see the actual error in controller
+            throw;
         }
     }
 }

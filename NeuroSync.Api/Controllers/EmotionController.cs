@@ -67,8 +67,10 @@ public class EmotionController : ControllerBase
             // Generate adaptive response with emotional intelligence
             var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, request.Text);
 
-            // Get IoT actions (async to ensure real device parameters are populated)
-            var iotActions = await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion);
+            // IoT only when user asks for lights/music/environment (Jarvis converse-first)
+            var iotActions = DecisionEngine.ShouldTriggerIoT(request.Text)
+                ? await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion)
+                : new List<IoTAction>();
 
             // Send real-time updates via SignalR
             await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
@@ -233,13 +235,34 @@ public class EmotionController : ControllerBase
                 }
             }
 
-            // Create emotion result from facial expression
+            // Create emotion result from facial expression + cues
             var emotionResult = new EmotionResult
             {
                 Emotion = emotionType,
                 Confidence = request.Confidence,
-                OriginalText = $"Facial expression detected: {request.Emotion}"
+                OriginalText = $"Facial: {request.Emotion}; gaze={request.GazeState}; eye={request.EyeContactScore:F2}; motion={request.FaceMotionScore:F2}",
+                Intensity = request.FaceMotionScore > 0.5f || request.Confidence > 0.85f ? "intense" : "moderate",
+                UnderstoodAs = $"Camera read: {emotionType}" +
+                    (request.EyeContactScore.HasValue ? $", eye contact {request.EyeContactScore:P0}" : "") +
+                    (!string.IsNullOrEmpty(request.GazeState) ? $", {request.GazeState.Replace('_', ' ')}" : ""),
+                LikelyCause = "body language / facial cues"
             };
+
+            // Also react to poor eye contact or restless motion even if emotion is neutral
+            if (!shouldRespond && (
+                (request.EyeContactScore.HasValue && request.EyeContactScore < 0.3f) ||
+                (request.FaceMotionScore.HasValue && request.FaceMotionScore > 0.55f) ||
+                request.GazeState is "eyes_closed_or_down"))
+            {
+                var gap = context?.LastInteraction.HasValue == true
+                    ? (DateTime.UtcNow - context.LastInteraction.Value).TotalSeconds
+                    : 999;
+                if (gap > 12)
+                {
+                    shouldRespond = true;
+                    reason = "engagement_cues";
+                }
+            }
 
             // Only generate and send response if we should respond
             AdaptiveResponse? adaptiveResponse = null;
@@ -248,27 +271,30 @@ public class EmotionController : ControllerBase
             if (shouldRespond)
             {
                 _logger.LogInformation($"Responding to facial emotion: {emotionType} (confidence: {request.Confidence:P2}, reason: {reason})");
-                
-                // Generate adaptive response with emotional intelligence
-                adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, $"I'm feeling {request.Emotion}");
 
-                // Get IoT actions (async to ensure real device parameters are populated)
-                iotActions = await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion);
+                var facialWellbeing = HttpContext.RequestServices.GetService<FacialWellbeingService>();
+                if (facialWellbeing != null)
+                {
+                    adaptiveResponse = facialWellbeing.BuildReaction(userId, request, emotionType);
+                    // Still learn via conversation memory
+                    conversationMemory?.AddEntry(userId, emotionResult.OriginalText ?? "facial", emotionResult, adaptiveResponse);
+                    var ctx = conversationMemory?.GetOrCreateContext(userId);
+                    if (ctx != null)
+                    {
+                        ctx.LastEmotion = emotionType;
+                        ctx.LastInteraction = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId,
+                        $"I look {request.Emotion}. Eye contact feels {request.GazeState}. {request.CueNotes}");
+                }
 
-                // Send real-time updates via SignalR
+                iotActions = new List<IoTAction>();
+
                 await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
                 await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
-                
-                foreach (var action in iotActions)
-                {
-                    await _hubContext.Clients.All.SendAsync("IoTAction", action);
-                }
-                
-                // Update conversation memory
-                if (conversationMemory != null && adaptiveResponse != null)
-                {
-                    conversationMemory.AddEntry(userId, $"Facial: {request.Emotion}", emotionResult, adaptiveResponse);
-                }
             }
             else
             {
@@ -431,11 +457,19 @@ public class EmotionController : ControllerBase
 
             var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResultForResponse, userId, request.Text);
 
-            // Get advanced actions
-            var actionOrchestrator = HttpContext.RequestServices.GetService<AdvancedActionOrchestrator>();
-            var iotActions = actionOrchestrator != null
-                ? await actionOrchestrator.OrchestrateActions(fusedResult, userId)
-                : await _decisionEngine.GetIoTActionsAsync(fusedResult.PrimaryEmotion);
+            // IoT only when user explicitly asks for lights/music/environment
+            List<IoTAction> iotActions;
+            if (DecisionEngine.ShouldTriggerIoT(request.Text))
+            {
+                var actionOrchestrator = HttpContext.RequestServices.GetService<AdvancedActionOrchestrator>();
+                iotActions = actionOrchestrator != null
+                    ? await actionOrchestrator.OrchestrateActions(fusedResult, userId)
+                    : await _decisionEngine.GetIoTActionsAsync(fusedResult.PrimaryEmotion);
+            }
+            else
+            {
+                iotActions = new List<IoTAction>();
+            }
 
             // Send real-time updates via SignalR
             await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResultForResponse);

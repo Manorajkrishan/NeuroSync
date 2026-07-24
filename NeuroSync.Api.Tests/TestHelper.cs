@@ -73,7 +73,8 @@ public static class TestHelper
         logger ??= Mock.Of<ILogger<EmotionDetectionService>>();
         cache ??= CreatePredictionCache();
         
-        return new EmotionDetectionService(model, logger, cache);
+        var understanding = new EmotionUnderstandingService(Mock.Of<ILogger<EmotionUnderstandingService>>());
+        return new EmotionDetectionService(model, logger, cache, understanding);
     }
 
     /// <summary>

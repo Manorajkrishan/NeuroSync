@@ -1,0 +1,37 @@
+{
+  "UserId": "user_mryvkmw9_7zic6u",
+  "UserName": null,
+  "PreferredName": null,
+  "FirstInteraction": "2026-07-24T11:46:53.1056019Z",
+  "InteractionCount": 3,
+  "FavoriteActivities": [],
+  "MusicPreferences": [],
+  "ThingsThatHelp": [],
+  "ThingsThatMakeHappy": [],
+  "Triggers": [],
+  "Routines": {},
+  "ActiveHours": "afternoon",
+  "WorkSchedule": null,
+  "EmotionalPatterns": {
+    "Neutral": 3
+  },
+  "WhatHelpsWhen": {},
+  "RecoveryTime": {},
+  "CommunicationStyle": null,
+  "FormalityLevel": null,
+  "PrefersShortMessages": true,
+  "PrefersEmojis": false,
+  "LearningStage": 0,
+  "LastLearningUpdate": "2026-07-24T11:54:45.7321607Z",
+  "LearnedTopics": {},
+  "CustomAttributes": {
+    "lastDevice": "iPhone",
+    "lastPlatform": "ios",
+    "device:dev_82nhvl11": {
+      "Platform": "ios",
+      "DeviceName": "iPhone",
+      "LastSeenUtc": "2026-07-24T11:54:45.7315011Z",
+      "InteractionCount": 3
+    }
+  }
+}

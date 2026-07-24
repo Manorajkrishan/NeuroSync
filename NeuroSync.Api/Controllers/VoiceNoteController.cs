@@ -23,17 +23,17 @@ public class VoiceNoteController : ControllerBase
     }
 
     [HttpPost("upload")]
-    public async Task<IActionResult> UploadVoiceNote(
-        [FromForm] string userId,
-        [FromForm] string personName,
-        [FromForm] IFormFile audioFile,
-        [FromForm] string? description = null,
-        [FromForm] string? transcript = null)
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadVoiceNote([FromForm] UploadVoiceNoteFormRequest request)
     {
-        if (audioFile == null || audioFile.Length == 0)
+        if (request.AudioFile == null || request.AudioFile.Length == 0)
         {
             return BadRequest(new { error = "Audio file is required" });
         }
+
+        var userId = request.UserId ?? "default";
+        var personName = request.PersonName ?? string.Empty;
+        var audioFile = request.AudioFile;
 
         try
         {
@@ -44,8 +44,8 @@ public class VoiceNoteController : ControllerBase
                     personName,
                     stream,
                     audioFile.FileName,
-                    description,
-                    transcript);
+                    request.Description,
+                    request.Transcript);
 
                 // Associate with person
                 _personMemory.AssociateVoiceNote(userId, personName, voiceNote.Id);
@@ -102,5 +102,17 @@ public class VoiceNoteController : ControllerBase
 
         return Ok(new { success = true });
     }
+}
+
+/// <summary>
+/// Multipart form request for voice note upload (required for Swagger IFormFile support).
+/// </summary>
+public class UploadVoiceNoteFormRequest
+{
+    public string? UserId { get; set; }
+    public string? PersonName { get; set; }
+    public IFormFile AudioFile { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? Transcript { get; set; }
 }
 

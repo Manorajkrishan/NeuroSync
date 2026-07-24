@@ -21,8 +21,9 @@ public class EmotionDetectionServiceTests
     {
         _loggerMock = new Mock<ILogger<EmotionDetectionService>>();
         var testModel = TestHelper.GetTestModel();
-        var cache = new PredictionCache(); // Real instance, not mocked
-        _service = new EmotionDetectionService(testModel, _loggerMock.Object, cache);
+        var cache = new PredictionCache();
+        var understanding = new EmotionUnderstandingService(Mock.Of<ILogger<EmotionUnderstandingService>>());
+        _service = new EmotionDetectionService(testModel, _loggerMock.Object, cache, understanding);
         _testCases = GenerateEmotionTestCases();
     }
 

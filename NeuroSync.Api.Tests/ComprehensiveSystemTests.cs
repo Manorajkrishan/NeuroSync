@@ -3,6 +3,7 @@ using FluentAssertions;
 using NeuroSync.Api.Services;
 using NeuroSync.Core;
 using NeuroSync.IoT;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -29,12 +30,15 @@ public class ComprehensiveSystemTests
         var conversationLogger = loggerFactory.CreateLogger<ConversationMemory>();
         
         var cache = new PredictionCache();
+        var understanding = new EmotionUnderstandingService(loggerFactory.CreateLogger<EmotionUnderstandingService>());
         var testModel = TestHelper.GetTestModel();
-        _emotionDetectionService = new EmotionDetectionService(testModel, emotionLogger, cache);
+        _emotionDetectionService = new EmotionDetectionService(testModel, emotionLogger, cache, understanding);
         _iotSimulator = new IoTDeviceSimulator();
         _emotionalIntelligence = new EmotionalIntelligence(emotionalLogger);
-        
-        var conversationMemory = new ConversationMemory(conversationLogger);
+
+        var scopeFactory = new Mock<IServiceScopeFactory>();
+        scopeFactory.Setup(f => f.CreateScope()).Throws(new InvalidOperationException("no db in tests"));
+        var conversationMemory = new ConversationMemory(conversationLogger, scopeFactory.Object);
         _decisionEngine = new DecisionEngine(
             _iotSimulator,
             null,

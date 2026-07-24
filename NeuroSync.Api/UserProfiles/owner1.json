@@ -1,0 +1,51 @@
+{
+  "UserId": "owner1",
+  "UserName": "Krishan",
+  "PreferredName": "Krishan",
+  "FirstInteraction": "2026-07-24T11:32:00.085192Z",
+  "InteractionCount": 11,
+  "FavoriteActivities": [
+    "playing cricket"
+  ],
+  "MusicPreferences": [],
+  "ThingsThatHelp": [],
+  "ThingsThatMakeHappy": [
+    "playing cricket"
+  ],
+  "Triggers": [],
+  "Routines": {},
+  "ActiveHours": "afternoon",
+  "WorkSchedule": null,
+  "EmotionalPatterns": {
+    "Neutral": 4,
+    "Happy": 1,
+    "Excited": 2,
+    "Sad": 3,
+    "Anxious": 1
+  },
+  "WhatHelpsWhen": {},
+  "RecoveryTime": {},
+  "CommunicationStyle": null,
+  "FormalityLevel": null,
+  "PrefersShortMessages": true,
+  "PrefersEmojis": false,
+  "LearningStage": 2,
+  "LastLearningUpdate": "2026-07-24T11:43:42.3245995Z",
+  "LearnedTopics": {},
+  "CustomAttributes": {
+    "lastDevice": "iPhone",
+    "lastPlatform": "ios",
+    "device:pc1": {
+      "Platform": "windows",
+      "DeviceName": "Windows PC",
+      "LastSeenUtc": "2026-07-24T11:37:26.3116382Z",
+      "InteractionCount": 1
+    },
+    "device:phone1": {
+      "Platform": "ios",
+      "DeviceName": "iPhone",
+      "LastSeenUtc": "2026-07-24T11:37:26.5595404Z",
+      "InteractionCount": 1
+    }
+  }
+}

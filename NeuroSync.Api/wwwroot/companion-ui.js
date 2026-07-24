@@ -4,7 +4,14 @@
 // We'll use the global versions to avoid conflicts
 let companionMediaRecorder = null;
 let companionAudioChunks = [];
-let currentUserId = sessionStorage.getItem('neuroSync_userId') || sessionStorage.getItem('userId') || 'default';
+let currentUserId = (typeof localStorage !== 'undefined' && localStorage.getItem('neuroSync_userId'))
+    || sessionStorage.getItem('neuroSync_userId')
+    || sessionStorage.getItem('userId')
+    || 'default';
+if (currentUserId && currentUserId !== 'default') {
+    try { localStorage.setItem('neuroSync_userId', currentUserId); } catch (_) {}
+    sessionStorage.setItem('neuroSync_userId', currentUserId);
+}
 
 // IMPORTANT: Use lazy loading to get real functions when needed
 // This prevents issues with script loading order
@@ -845,6 +852,11 @@ async function startCornerFacialDetection(video, canvas, badge, confidence) {
             if (detections.length > 0) {
                 const detection = detections[0];
                 const expressions = detection.expressions;
+
+                let cues = { eyeContact: 0.5, faceMotion: 0, gaze: 'unknown', engagement: 'steady', notes: '' };
+                if (window.NeuroSyncFaceCues && detection.landmarks) {
+                    cues = window.NeuroSyncFaceCues.analyzeFaceCues(detection.landmarks, detection.detection?.box);
+                }
                 
                 let maxExpression = null;
                 let maxConfidence = 0;
@@ -870,12 +882,15 @@ async function startCornerFacialDetection(video, canvas, badge, confidence) {
                 const emotion = emotionMap[maxExpression] || 'Neutral';
                 
                 if (badge) badge.textContent = emotion;
-                if (confidence) confidence.textContent = `${Math.round(maxConfidence * 100)}%`;
+                if (confidence) {
+                    const eyePct = Math.round((cues.eyeContact || 0) * 100);
+                    confidence.textContent = `${Math.round(maxConfidence * 100)}% · 👁 ${eyePct}%`;
+                }
                 
-                // Send to server for processing (only if confidence is high enough)
-                // Higher threshold to avoid false positives
-                if (maxConfidence > 0.7) {
-                    sendCornerEmotionToServer(emotion.toLowerCase(), maxConfidence);
+                // Send to server — emotion OR strong eye/motion cues
+                const strongCues = cues.eyeContact < 0.3 || cues.faceMotion > 0.55 || cues.gaze === 'eyes_closed_or_down';
+                if (maxConfidence > 0.65 || strongCues) {
+                    sendCornerEmotionToServer(emotion.toLowerCase(), maxConfidence, cues);
                 }
             } else {
                 if (badge) badge.textContent = 'No Face';
@@ -901,7 +916,7 @@ async function startCornerFacialDetection(video, canvas, badge, confidence) {
 let lastCornerEmotionSent = null;
 let lastCornerEmotionTime = 0;
 
-async function sendCornerEmotionToServer(emotion, confidence) {
+async function sendCornerEmotionToServer(emotion, confidence, cues) {
     const now = Date.now();
     
     // Smart throttling: 
@@ -913,27 +928,28 @@ async function sendCornerEmotionToServer(emotion, confidence) {
     const isNegative = negativeEmotions.includes(emotion);
     const isNeutral = emotion === 'neutral';
     const isEmotionChange = lastCornerEmotionSent !== emotion;
+    const strongCues = cues && (cues.eyeContact < 0.3 || cues.faceMotion > 0.55 || cues.gaze === 'eyes_closed_or_down');
     
     let throttleTime = 5000; // Default: 5 seconds
-    if (isNeutral) {
-        throttleTime = 8000; // Neutral: 8 seconds (less frequent)
-    } else if (isNegative) {
-        throttleTime = 4000; // Negative emotions: 4 seconds (more responsive)
+    if (isNeutral && !strongCues) {
+        throttleTime = 8000;
+    } else if (isNegative || strongCues) {
+        throttleTime = 4000;
     }
     if (isEmotionChange) {
-        throttleTime = 2000; // Emotion change: 2 seconds (immediate response)
+        throttleTime = 2000;
     }
     
     // Check if we should send
-    if (!isEmotionChange && (now - lastCornerEmotionTime) < throttleTime) {
-        return; // Same emotion, too soon
+    if (!isEmotionChange && !strongCues && (now - lastCornerEmotionTime) < throttleTime) {
+        return;
     }
     
     lastCornerEmotionSent = emotion;
     lastCornerEmotionTime = now;
     
     try {
-        const userId = sessionStorage.getItem('neuroSync_userId') || 'default';
+        const userId = localStorage.getItem('neuroSync_userId') || sessionStorage.getItem('neuroSync_userId') || 'default';
         const apiBaseUrl = window.API_BASE_URL || window.location.origin;
         
         const response = await fetch(`${apiBaseUrl}/api/emotion/facial`, {
@@ -944,7 +960,12 @@ async function sendCornerEmotionToServer(emotion, confidence) {
                 confidence: confidence,
                 userId: userId,
                 source: 'corner_camera',
-                realTime: true
+                realTime: true,
+                eyeContactScore: cues?.eyeContact,
+                faceMotionScore: cues?.faceMotion,
+                gazeState: cues?.gaze,
+                engagement: cues?.engagement,
+                cueNotes: cues?.notes
             })
         });
         

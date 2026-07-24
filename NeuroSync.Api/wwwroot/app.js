@@ -227,10 +227,16 @@ async function detectEmotion(textParam = null) {
     }
 
     try {
-        // Get or create user ID
-        let userId = sessionStorage.getItem('neuroSync_userId');
+        // Get or create stable user ID (shared across devices after pairing)
+        let userId = (window.NeuroSyncDeviceSync && window.NeuroSyncDeviceSync.getUserId)
+            ? window.NeuroSyncDeviceSync.getUserId()
+            : (localStorage.getItem('neuroSync_userId') || sessionStorage.getItem('neuroSync_userId'));
         if (!userId) {
             userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('neuroSync_userId', userId);
+            sessionStorage.setItem('neuroSync_userId', userId);
+        } else {
+            localStorage.setItem('neuroSync_userId', userId);
             sessionStorage.setItem('neuroSync_userId', userId);
         }
 

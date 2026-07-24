@@ -1,0 +1,42 @@
+[
+  {
+    "DeviceId": "phone1",
+    "UserId": "owner1",
+    "DeviceName": "iPhone",
+    "Platform": "ios",
+    "UserAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8875",
+    "FirstSeenUtc": "2026-07-24T11:37:26.5595401Z",
+    "LastSeenUtc": "2026-07-24T11:37:26.5595404Z",
+    "InteractionCount": 1
+  },
+  {
+    "DeviceId": "dev_48onbkl9",
+    "UserId": "user_1784891690288_q2ahe3mv1",
+    "DeviceName": "Windows PC",
+    "Platform": "windows",
+    "UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "FirstSeenUtc": "2026-07-24T11:37:59.4386031Z",
+    "LastSeenUtc": "2026-07-24T11:48:19.5389935Z",
+    "InteractionCount": 3
+  },
+  {
+    "DeviceId": "pc1",
+    "UserId": "owner1",
+    "DeviceName": "Windows PC",
+    "Platform": "windows",
+    "UserAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8875",
+    "FirstSeenUtc": "2026-07-24T11:37:26.3115583Z",
+    "LastSeenUtc": "2026-07-24T11:37:26.3116382Z",
+    "InteractionCount": 1
+  },
+  {
+    "DeviceId": "dev_82nhvl11",
+    "UserId": "user_mryvkmw9_7zic6u",
+    "DeviceName": "iPhone",
+    "Platform": "ios",
+    "UserAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/150.0.7871.113 Mobile/15E148 Safari/604.1",
+    "FirstSeenUtc": "2026-07-24T11:46:53.1054547Z",
+    "LastSeenUtc": "2026-07-24T11:54:45.7315011Z",
+    "InteractionCount": 3
+  }
+]

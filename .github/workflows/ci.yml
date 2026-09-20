@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore
+        run: dotnet restore NeuroSync.sln
+      - name: Build
+        run: dotnet build NeuroSync.sln --no-restore -c Release
+      - name: Test
+        run: dotnet test NeuroSync.Api.Tests/NeuroSync.Api.Tests.csproj --no-build -c Release --verbosity normal

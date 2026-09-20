@@ -6,6 +6,11 @@ obj/
 # Secrets
 appsettings.json
 appsettings.Development.json
+.env
+.env.local
+**/UserProfiles/
+**/UserConsents/
+**/ConnectedDevices/
 
 # User files
 *.user

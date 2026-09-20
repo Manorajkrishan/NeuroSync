@@ -1,0 +1,17 @@
+services:
+  neurosync:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Auth__RequireApiKey: "true"
+      Auth__ApiKey: ${NEUROSYNC_API_KEY:-change-me-before-deploy}
+      Cors__AllowedOrigins__0: ${NEUROSYNC_ORIGIN:-http://localhost:8080}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

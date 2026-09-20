@@ -180,12 +180,8 @@ if (typeof window !== 'undefined') {
             }
         }, 300);
         
-        // Auto-start corner camera (wait for scripts to load)
-        setTimeout(() => {
-            if (typeof startCornerCamera === 'function') {
-                startCornerCamera();
-            }
-        }, 1500);
+        // Facial camera is OPT-IN only (FaceAnalysisConsent). Never auto-start.
+        // Users enable it from privacy settings / V1 demo.
         
         if (typeof setupInputHandlers === 'function') {
             setupInputHandlers();
@@ -400,7 +396,9 @@ function sendMessage() {
         const apiBaseUrl = window.API_BASE_URL || API_BASE_URL || window.location.origin;
         fetch(`${apiBaseUrl}/api/emotion/detect`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: (typeof window.neurosyncHeaders === 'function')
+                ? window.neurosyncHeaders()
+                : { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text, userId: currentUserId })
         })
         .then(res => res.json())
@@ -436,7 +434,9 @@ function quickEmotion(emotion) {
 function sendEmotionDetectionRequest(text, userId, apiBaseUrl) {
     fetch(`${apiBaseUrl}/api/emotion/detect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: (typeof window.neurosyncHeaders === 'function')
+            ? window.neurosyncHeaders()
+            : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, userId })
     })
     .then(res => res.json())

@@ -28,6 +28,12 @@ public class EmotionResult
     /// </summary>
     public Dictionary<string, float> SignalEstimates { get; set; } = new();
 
+    /// <summary>How much we should trust this turn's emotion/signal read.</summary>
+    public UncertaintyLevel Uncertainty { get; set; } = UncertaintyLevel.InsufficientEvidence;
+
+    /// <summary>Short hedge the companion can surface when uncertainty is not HighConfidence.</summary>
+    public string? UncertaintyNote { get; set; }
+
     /// <summary>Always surfaced so clients never treat estimates as clinical facts.</summary>
     public string Disclaimer { get; set; } =
         "Emotion signals are uncertain estimates for wellbeing support. NeuroSync does not diagnose mental illness or replace professional care.";

@@ -24,6 +24,8 @@ public class EmotionUnderstandingService
         {
             mlResult.UnderstoodAs = "You're quiet right now — I'm here when you're ready.";
             mlResult.Intensity = "mild";
+            mlResult.Uncertainty = UncertaintyLevel.InsufficientEvidence;
+            mlResult.UncertaintyNote = "I'm not sure — there isn't enough to go on yet.";
             return mlResult;
         }
 
@@ -49,7 +51,6 @@ public class EmotionUnderstandingService
             lower.StartsWith("my name is") || lower.StartsWith("call me ") ||
             lower.StartsWith("i'm ") && lower.Split(' ').Length <= 4 && !HasFeelingWords(lower))
         {
-            // Only force Neutral if they didn't also express a feeling
             if (!HasFeelingWords(lower) && explicitEmotion == null)
             {
                 result.Emotion = EmotionType.Neutral;
@@ -78,20 +79,77 @@ public class EmotionUnderstandingService
         // 5) Likely cause
         result.LikelyCause = DetectLikelyCause(lower);
 
-        // 6) Uncertain multi-signal estimates (vision: not a single label)
+        // 6) Uncertain multi-signal estimates
         result.SignalEstimates = BuildSignalEstimates(lower, result);
 
-        // 7) Human-readable understanding
+        // 7) Uncertainty — never treat a single % as truth
+        AssignUncertainty(result, explicitEmotion.HasValue, lexical, mlResult);
+
+        // 8) Human-readable understanding (hedged when uncertain)
         result.UnderstoodAs = BuildUnderstoodAs(result);
         result.Disclaimer =
             "Emotion signals are uncertain estimates for wellbeing support. NeuroSync does not diagnose mental illness or replace professional care.";
 
+        // Privacy: do not log raw user text
         _logger.LogInformation(
-            "Understood emotion: {Emotion} ({Intensity}, {Confidence:P0}) cause={Cause} | {Text}",
-            result.Emotion, result.Intensity, result.Confidence, result.LikelyCause ?? "—",
-            text.Length > 60 ? text[..60] + "…" : text);
+            "Understood emotion: {Emotion} uncertainty={Uncertainty} confidence={Confidence:P0} len={Len}",
+            result.Emotion, result.Uncertainty, result.Confidence, text.Length);
 
         return result;
+    }
+
+    private static void AssignUncertainty(
+        EmotionResult result,
+        bool hadExplicit,
+        EmotionType? lexical,
+        EmotionResult mlResult)
+    {
+        var wordCount = (result.OriginalText ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+
+        if (wordCount <= 1 && !hadExplicit)
+        {
+            result.Uncertainty = UncertaintyLevel.InsufficientEvidence;
+            result.UncertaintyNote = "I'm not sure — there isn't enough to go on yet.";
+            return;
+        }
+
+        if (result.SecondaryEmotion.HasValue &&
+            Conflicts(result.Emotion, result.SecondaryEmotion.Value, (result.OriginalText ?? "").ToLowerInvariant()))
+        {
+            result.Uncertainty = UncertaintyLevel.ConflictingSignals;
+            result.UncertaintyNote = "I'm getting mixed signals — I may be reading this wrong.";
+            return;
+        }
+
+        if (lexical.HasValue && lexical.Value != result.Emotion && mlResult.Confidence >= 0.55f && !hadExplicit)
+        {
+            result.Uncertainty = UncertaintyLevel.ConflictingSignals;
+            result.UncertaintyNote = "I may be reading this wrong.";
+            return;
+        }
+
+        if (hadExplicit && result.Confidence >= 0.85f)
+        {
+            result.Uncertainty = UncertaintyLevel.HighConfidence;
+            result.UncertaintyNote = null;
+            return;
+        }
+
+        if (result.Confidence >= 0.75f && (hadExplicit || lexical.HasValue))
+        {
+            result.Uncertainty = UncertaintyLevel.HighConfidence;
+            return;
+        }
+
+        if (result.Confidence < 0.45f || (!hadExplicit && !lexical.HasValue && wordCount < 4))
+        {
+            result.Uncertainty = UncertaintyLevel.InsufficientEvidence;
+            result.UncertaintyNote = "I'm not sure I have enough signal to go on.";
+            return;
+        }
+
+        result.Uncertainty = UncertaintyLevel.Uncertain;
+        result.UncertaintyNote = "I may be reading this wrong.";
     }
 
     private static Dictionary<string, float> BuildSignalEstimates(string lower, EmotionResult result)
@@ -217,6 +275,11 @@ public class EmotionUnderstandingService
 
     private static string BuildUnderstoodAs(EmotionResult r)
     {
+        if (r.Uncertainty is UncertaintyLevel.InsufficientEvidence)
+            return "I'm not sure yet how you're feeling.";
+        if (r.Uncertainty is UncertaintyLevel.ConflictingSignals or UncertaintyLevel.Uncertain)
+            return r.UncertaintyNote ?? "I may be reading this wrong.";
+
         var intensity = r.Intensity switch
         {
             "intense" => "really ",
@@ -236,9 +299,9 @@ public class EmotionUnderstandingService
             _ => "okay / neutral"
         };
 
-        var line = $"I understand you're feeling {intensity}{emotionWord}";
+        var line = $"It sounds like you might be feeling {intensity}{emotionWord}";
         if (!string.IsNullOrEmpty(r.LikelyCause))
-            line += $" — this seems connected to {r.LikelyCause}";
+            line += $" — possibly connected to {r.LikelyCause}";
         if (r.SecondaryEmotion.HasValue && r.SecondaryEmotion != r.Emotion)
             line += $", with some {r.SecondaryEmotion.Value.ToString().ToLowerInvariant()} mixed in";
         return line + ".";

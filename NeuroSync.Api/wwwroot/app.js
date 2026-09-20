@@ -1,6 +1,7 @@
 // Initialize API_BASE_URL safely
 let API_BASE_URL;
 let HUB_URL;
+let API_KEY = (typeof localStorage !== 'undefined' && localStorage.getItem('ns_api_key')) || '';
 
 if (typeof window !== 'undefined' && window.location) {
     API_BASE_URL = window.location.origin;
@@ -8,12 +9,20 @@ if (typeof window !== 'undefined' && window.location) {
     
     // Make API_BASE_URL available globally for facial-detection.js
     window.API_BASE_URL = API_BASE_URL;
+    window.NEUROSYNC_API_KEY = API_KEY;
+    window.neurosyncHeaders = function() {
+        const h = { 'Content-Type': 'application/json' };
+        const key = localStorage.getItem('ns_api_key') || window.NEUROSYNC_API_KEY || '';
+        if (key) h['X-Api-Key'] = key;
+        return h;
+    };
 } else {
     // Fallback for non-browser environments
     API_BASE_URL = '';
     HUB_URL = '/emotionHub';
     if (typeof window !== 'undefined') {
         window.API_BASE_URL = API_BASE_URL;
+        window.neurosyncHeaders = () => ({ 'Content-Type': 'application/json' });
     }
 }
 
@@ -58,7 +67,10 @@ function initializeSignalR() {
         console.log('HubConnectionBuilder available:', typeof signalR?.HubConnectionBuilder !== 'undefined');
         
         connection = new signalR.HubConnectionBuilder()
-            .withUrl(HUB_URL)
+            .withUrl((() => {
+                const key = (typeof localStorage !== 'undefined' && localStorage.getItem('ns_api_key')) || window.NEUROSYNC_API_KEY || '';
+                return key ? `${HUB_URL}?api_key=${encodeURIComponent(key)}` : HUB_URL;
+            })())
             .withAutomaticReconnect({
                 nextRetryDelayInMilliseconds: retryContext => {
                     if (retryContext.elapsedMilliseconds < 60000) {
@@ -244,9 +256,9 @@ async function detectEmotion(textParam = null) {
 
         const response = await fetch(`${API_BASE_URL}/api/emotion/detect`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: (typeof window.neurosyncHeaders === 'function')
+                ? window.neurosyncHeaders()
+                : { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 text: text,
                 userId: userId

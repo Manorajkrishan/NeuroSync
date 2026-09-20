@@ -1,5 +1,15 @@
 [
   {
+    "DeviceId": "dev_6d0y5wum",
+    "UserId": "user_mu9kte9y_l7l3ui",
+    "DeviceName": "Windows PC",
+    "Platform": "windows",
+    "UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "FirstSeenUtc": "2026-09-20T08:50:39.630123Z",
+    "LastSeenUtc": "2026-09-20T08:55:40.1226326Z",
+    "InteractionCount": 2
+  },
+  {
     "DeviceId": "phone1",
     "UserId": "owner1",
     "DeviceName": "iPhone",
@@ -18,6 +28,16 @@
     "FirstSeenUtc": "2026-07-24T11:37:59.4386031Z",
     "LastSeenUtc": "2026-07-24T11:48:19.5389935Z",
     "InteractionCount": 3
+  },
+  {
+    "DeviceId": "dev_n3vgmq6p",
+    "UserId": "user_mu9kt320_pbcztr",
+    "DeviceName": "Windows PC",
+    "Platform": "windows",
+    "UserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Cursor/3.17.8 Chrome/144.0.7559.236 Electron/40.10.3 Safari/537.36",
+    "FirstSeenUtc": "2026-09-20T08:50:25.2613785Z",
+    "LastSeenUtc": "2026-09-20T08:55:25.0915135Z",
+    "InteractionCount": 1
   },
   {
     "DeviceId": "pc1",

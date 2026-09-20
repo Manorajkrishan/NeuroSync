@@ -39,6 +39,21 @@ public class EthicalAIConsent
     /// Consent for data sharing (if applicable)
     /// </summary>
     public bool DataSharingConsent { get; set; }
+
+    /// <summary>Long-term conversation memory. Default OFF.</summary>
+    public bool MemoryConsent { get; set; }
+
+    /// <summary>Emotion history / baseline timeline. Default OFF.</summary>
+    public bool EmotionHistoryConsent { get; set; }
+
+    /// <summary>Experimental face analysis. Default OFF. Must not drive safety.</summary>
+    public bool FaceAnalysisConsent { get; set; }
+
+    /// <summary>IoT / Quiet Mode environment actions. Default OFF.</summary>
+    public bool IoTConsent { get; set; }
+
+    /// <summary>Future wearables. Default OFF.</summary>
+    public bool WearableConsent { get; set; }
     
     /// <summary>
     /// Consent timestamp

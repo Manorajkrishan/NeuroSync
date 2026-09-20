@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="NeuroSync">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>NeuroSync — Your best friend, always here</title>
+    <title>NeuroSync — Wellbeing companion</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
@@ -33,8 +33,11 @@
                 </div>
             </div>
             <div class="header-actions">
-                <a href="/dashboard.html" class="icon-btn dashboard-btn" title="Open Human OS Dashboard" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px;">
-                    🧠 Dashboard
+                <a href="/v1.html" class="icon-btn dashboard-btn" title="V1 Safety demo" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px;">
+                  V1 Demo
+                </a>
+                <a href="/dashboard.html" class="icon-btn dashboard-btn" title="Experimental dashboard" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px; opacity:.7;">
+                  Dashboard (exp.)
                 </a>
                 <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
             </div>
@@ -45,7 +48,7 @@
             <div class="welcome-message">
                 <div class="message-avatar">💛</div>
                 <div class="message-bubble ai-message">
-                    <div class="message-text">Hey. I'm NeuroSync — think of me as a best friend who's always here. A lot of people feel alone or like they have no one to talk to. You can share anything with me: the heavy stuff, the small stuff, the messy stuff. No judgment. We'll talk it through, and I'll help you feel a little lighter and happier. How are you, really?</div>
+                    <div class="message-text">Hey. I'm NeuroSync — an emotion-aware wellbeing companion (not a doctor or therapist). I can be unsure, I ask before environment actions, and you control memory. How are you, really?</div>
                     <div class="message-time">Just now</div>
                 </div>
             </div>
@@ -153,10 +156,10 @@
         <!-- Overlay (for sidebar/camera) -->
         <div id="overlay" class="overlay" style="display: none;"></div>
 
-        <!-- Always-on Corner Camera Widget -->
-        <div id="cornerCamera" class="corner-camera">
+        <!-- Always-on Corner Camera Widget (experimental — OFF until FaceAnalysisConsent) -->
+        <div id="cornerCamera" class="corner-camera collapsed" style="display: none;" data-experimental="true">
             <div class="corner-camera-header">
-                <span class="corner-camera-title">📷 Live Emotion</span>
+                <span class="corner-camera-title">📷 Face (experimental)</span>
                 <button class="corner-camera-toggle" id="cornerCameraToggle" title="Toggle Camera">👁️</button>
             </div>
             <div class="corner-camera-content">

@@ -8,6 +8,7 @@ using NeuroSync.Api.Hubs;
 using NeuroSync.Api.Middleware;
 using NeuroSync.Api.Services;
 using NeuroSync.Api.Data;
+using NeuroSync.Core;
 using NeuroSync.IoT;
 using NeuroSync.IoT.Configuration;
 using NeuroSync.IoT.Interfaces;
@@ -19,6 +20,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("NeuroSync V1"));
 
 // Rate limiting (production-friendly)
 builder.Services.AddRateLimiter(options =>
@@ -58,14 +61,31 @@ builder.Services.AddDbContext<NeuroSyncDbContext>(options =>
     }
 });
 
-// Configure CORS for SignalR and API
+// Configure CORS — locked in Production to Cors:AllowedOrigins
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("NeuroSyncCors", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                      ?? Array.Empty<string>();
+        origins = origins.Where(o => !string.IsNullOrWhiteSpace(o)).ToArray();
+
+        if (builder.Environment.IsDevelopment() && origins.Length == 0)
+        {
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        }
+        else if (origins.Length > 0)
+        {
+            policy.WithOrigins(origins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }
+        else
+        {
+            // Fail closed for browser clients when misconfigured in Production
+            policy.SetIsOriginAllowed(_ => false).AllowAnyHeader().AllowAnyMethod();
+        }
     });
 });
 
@@ -208,6 +228,7 @@ builder.Services.AddSingleton<FacialWellbeingService>();
 builder.Services.AddSingleton<SafetyGateService>();
 builder.Services.AddSingleton<CompanionModeService>();
 builder.Services.AddSingleton<EmotionalBaselineService>();
+builder.Services.AddSingleton<ICompanionProvider, TemplateCompanionProvider>();
 
 // Add Person Memory
 builder.Services.AddSingleton<PersonMemory>();
@@ -218,7 +239,7 @@ builder.Services.AddScoped<ActionExecutor>();
 // Add Real-World Data Collector for continuous learning
 builder.Services.AddSingleton<RealWorldDataCollector>();
 
-// Add Decision Engine (safety → modes → companion)
+// Add Decision Engine (safety → modes → companion provider)
 builder.Services.AddScoped<DecisionEngine>(sp =>
 {
     var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
@@ -230,7 +251,9 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var safetyGate = sp.GetService<SafetyGateService>();
     var modes = sp.GetService<CompanionModeService>();
     var baseline = sp.GetService<EmotionalBaselineService>();
-    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion, safetyGate, modes, baseline);
+    var provider = sp.GetRequiredService<ICompanionProvider>();
+    var consent = sp.GetService<EthicalAIFrameworkService>();
+    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion, safetyGate, modes, baseline, provider, consent);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>
@@ -362,22 +385,19 @@ if (app.Environment.IsDevelopment())
 // Global exception handler (no stack trace in production)
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 
-// Use CORS
-app.UseCors("AllowAll");
-
+app.UseCors("NeuroSyncCors");
+app.UseMiddleware<ApiKeyAuthMiddleware>();
 app.UseRateLimiter();
-
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Map SignalR hub
+app.MapHealthChecks("/health");
 app.MapHub<EmotionHub>("/emotionHub");
-
-// Serve static files (for frontend)
-app.UseStaticFiles();
-
-// Fallback to index.html for SPA routing
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+// Expose for WebApplicationFactory integration tests
+public partial class Program { }

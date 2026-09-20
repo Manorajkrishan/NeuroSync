@@ -47,13 +47,63 @@ public class EthicalAIFrameworkService
         return consentType switch
         {
             ConsentType.EmotionSensing => consent.EmotionSensingConsent,
-            ConsentType.VisualLayer => consent.VisualLayerConsent,
+            ConsentType.VisualLayer => consent.VisualLayerConsent || consent.FaceAnalysisConsent,
             ConsentType.AudioLayer => consent.AudioLayerConsent,
-            ConsentType.BiometricLayer => consent.BiometricLayerConsent,
-            ConsentType.DataStorage => consent.DataStorageConsent,
+            ConsentType.BiometricLayer => consent.BiometricLayerConsent || consent.WearableConsent,
+            ConsentType.DataStorage => consent.DataStorageConsent || consent.MemoryConsent,
             ConsentType.DataSharing => consent.DataSharingConsent,
+            ConsentType.Memory => consent.MemoryConsent || consent.DataStorageConsent,
+            ConsentType.EmotionHistory => consent.EmotionHistoryConsent || consent.DataStorageConsent,
+            ConsentType.FaceAnalysis => consent.FaceAnalysisConsent || consent.VisualLayerConsent,
+            ConsentType.IoT => consent.IoTConsent,
+            ConsentType.Wearable => consent.WearableConsent || consent.BiometricLayerConsent,
             _ => false
         };
+    }
+
+    /// <summary>Create default consents — sensitive collection OFF.</summary>
+    public EthicalAIConsent GetOrCreateDefault(string userId)
+    {
+        if (_consents.TryGetValue(userId, out var existing))
+            return existing;
+
+        var created = new EthicalAIConsent
+        {
+            UserId = userId,
+            EmotionSensingConsent = true, // ephemeral turn classification allowed
+            MemoryConsent = false,
+            EmotionHistoryConsent = false,
+            FaceAnalysisConsent = false,
+            IoTConsent = false,
+            WearableConsent = false,
+            DataStorageConsent = false,
+            DataSharingConsent = false,
+            VisualLayerConsent = false,
+            AudioLayerConsent = false,
+            BiometricLayerConsent = false,
+            AnonymizationEnabled = true,
+            PrivacyLevel = 10,
+            ConsentTimestamp = DateTime.UtcNow,
+            LastUpdated = DateTime.UtcNow
+        };
+        _consents[userId] = created;
+        return created;
+    }
+
+    public void RevokeAllSensitive(string userId)
+    {
+        var c = GetOrCreateDefault(userId);
+        c.MemoryConsent = false;
+        c.EmotionHistoryConsent = false;
+        c.FaceAnalysisConsent = false;
+        c.IoTConsent = false;
+        c.WearableConsent = false;
+        c.DataStorageConsent = false;
+        c.DataSharingConsent = false;
+        c.VisualLayerConsent = false;
+        c.AudioLayerConsent = false;
+        c.BiometricLayerConsent = false;
+        SetConsent(userId, c);
     }
 
     /// <summary>
@@ -176,5 +226,10 @@ public enum ConsentType
     AudioLayer,
     BiometricLayer,
     DataStorage,
-    DataSharing
+    DataSharing,
+    Memory,
+    EmotionHistory,
+    FaceAnalysis,
+    IoT,
+    Wearable
 }

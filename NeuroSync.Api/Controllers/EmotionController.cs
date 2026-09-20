@@ -168,6 +168,16 @@ public class EmotionController : ControllerBase
         {
             var userId = request.UserId ?? "default";
 
+            var ethical = HttpContext.RequestServices.GetService<EthicalAIFrameworkService>();
+            if (ethical != null && !ethical.HasConsent(userId, ConsentType.FaceAnalysis))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    error = "FaceAnalysisConsent is OFF. Enable it in privacy settings. Facial analysis is experimental and never drives safety decisions.",
+                    experimental = true
+                });
+            }
+
             // Convert string emotion to EmotionType enum
             if (!Enum.TryParse<EmotionType>(request.Emotion, true, out var emotionType))
             {

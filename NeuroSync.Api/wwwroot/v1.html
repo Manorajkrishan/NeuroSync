@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NeuroSync V1 — Wellbeing Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #0f1714;
+      --bg1: #1a2a24;
+      --ink: #e8f0ec;
+      --muted: #9bb0a6;
+      --accent: #3d9b7a;
+      --warn: #c4a35a;
+      --line: rgba(232,240,236,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font-family: "Source Sans 3", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #234438 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #1e2f40 0%, transparent 50%),
+        linear-gradient(165deg, var(--bg0), var(--bg1));
+    }
+    .shell {
+      max-width: 920px; margin: 0 auto; padding: 28px 18px 40px;
+      display: grid; gap: 16px;
+    }
+    header h1 {
+      font-family: Fraunces, Georgia, serif; font-weight: 700;
+      font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0 0 6px;
+    }
+    header p { margin: 0; color: var(--muted); max-width: 42rem; }
+    .chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .chip {
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 6px 12px; font-size: .85rem; color: var(--muted);
+      background: rgba(255,255,255,.03);
+    }
+    .chip strong { color: var(--ink); font-weight: 600; }
+    .layout {
+      display: grid; grid-template-columns: 1.4fr .8fr; gap: 14px;
+    }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+    .panel {
+      border: 1px solid var(--line); border-radius: 18px;
+      background: rgba(8,14,12,.45); backdrop-filter: blur(8px);
+      padding: 14px;
+    }
+    #chat {
+      height: min(58vh, 520px); overflow: auto; display: flex;
+      flex-direction: column; gap: 10px; padding: 6px;
+    }
+    .bubble {
+      max-width: 85%; padding: 10px 12px; border-radius: 14px;
+      line-height: 1.45; white-space: pre-wrap;
+    }
+    .user { align-self: flex-end; background: #2a4a3d; }
+    .ai { align-self: flex-start; background: rgba(255,255,255,.06); border: 1px solid var(--line); }
+    .meta { font-size: .75rem; color: var(--muted); margin-top: 4px; }
+    .composer { display: flex; gap: 8px; margin-top: 10px; }
+    .composer textarea {
+      flex: 1; resize: none; min-height: 52px; border-radius: 12px;
+      border: 1px solid var(--line); background: rgba(0,0,0,.25);
+      color: var(--ink); padding: 10px 12px; font: inherit;
+    }
+    button {
+      border: 0; border-radius: 12px; background: var(--accent);
+      color: #04110c; font-weight: 600; padding: 0 16px; cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    .side h3 { margin: 0 0 8px; font-family: Fraunces, serif; font-size: 1.05rem; }
+    .side label { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
+    .note { color: var(--muted); font-size: .8rem; margin-top: 10px; }
+    .offer {
+      display: none; margin-top: 10px; padding: 10px 12px; border-radius: 12px;
+      border: 1px dashed var(--warn); color: #f0e2b8;
+    }
+    .signals { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sig { font-size: .78rem; padding: 4px 8px; border-radius: 8px; background: rgba(61,155,122,.15); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>NeuroSync</h1>
+      <p>Emotion-aware wellbeing companion. Not a diagnostic or therapy product. V1 Safety &amp; Evaluation demo.</p>
+      <div class="chiprow">
+        <span class="chip">Mode <strong id="modeChip">—</strong></span>
+        <span class="chip">Uncertainty <strong id="uncChip">—</strong></span>
+        <span class="chip">Safety <strong id="safeChip">Normal</strong></span>
+        <span class="chip">Baseline conf. <strong id="baseChip">n/a</strong></span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="panel">
+        <div id="chat"></div>
+        <div id="actionOffer" class="offer"></div>
+        <div class="composer">
+          <textarea id="input" placeholder="Say what’s going on… (text only for V1)"></textarea>
+          <button id="send">Send</button>
+        </div>
+        <p class="note">Facial analysis is experimental and off by default. It never drives safety decisions.</p>
+      </section>
+
+      <aside class="panel side">
+        <h3>Privacy controls</h3>
+        <label><span>API key (prod)</span><input type="password" id="apiKey" placeholder="X-Api-Key" style="max-width:140px;background:#0b1210;color:#e8f0ec;border:1px solid var(--line);border-radius:8px;padding:4px 8px;" /></label>
+        <label><span>Memory</span><input type="checkbox" id="cMemory" /></label>
+        <label><span>Emotion history</span><input type="checkbox" id="cHistory" /></label>
+        <label><span>Face analysis (experimental)</span><input type="checkbox" id="cFace" /></label>
+        <label><span>IoT / Quiet Mode actions</span><input type="checkbox" id="cIoT" /></label>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button class="secondary" id="saveConsent">Save consent</button>
+          <button class="secondary" id="exportBtn">Export</button>
+        </div>
+        <button class="secondary" id="deleteBtn" style="width:100%; margin-top:8px;">Delete history permanently</button>
+        <h3 style="margin-top:18px;">Subtle signals</h3>
+        <div id="signals" class="signals"></div>
+        <p class="note" id="traceNote">Decision traces stay internal for debugging.</p>
+      </aside>
+    </div>
+  </div>
+  <script>
+    const userId = localStorage.getItem('ns_uid') || ('u_' + Math.random().toString(36).slice(2, 10));
+    localStorage.setItem('ns_uid', userId);
+    const chat = document.getElementById('chat');
+    const api = '';
+    apiKey.value = localStorage.getItem('ns_api_key') || '';
+    apiKey.onchange = () => localStorage.setItem('ns_api_key', apiKey.value.trim());
+
+    function headers() {
+      const h = { 'Content-Type': 'application/json' };
+      const k = localStorage.getItem('ns_api_key') || apiKey.value.trim();
+      if (k) h['X-Api-Key'] = k;
+      return h;
+    }
+
+    function add(role, text, meta) {
+      const d = document.createElement('div');
+      d.className = 'bubble ' + role;
+      d.textContent = text;
+      if (meta) {
+        const m = document.createElement('div');
+        m.className = 'meta';
+        m.textContent = meta;
+        d.appendChild(m);
+      }
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    add('ai', "Hey. I'm NeuroSync — a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
+
+    async function loadConsent() {
+      const r = await fetch(`${api}/api/privacy/consent/${userId}`, { headers: headers() });
+      const c = await r.json();
+      cMemory.checked = !!c.memoryConsent;
+      cHistory.checked = !!c.emotionHistoryConsent;
+      cFace.checked = !!c.faceAnalysisConsent;
+      cIoT.checked = !!c.ioTConsent || !!c.iotConsent;
+    }
+
+    saveConsent.onclick = async () => {
+      localStorage.setItem('ns_api_key', apiKey.value.trim());
+      await fetch(`${api}/api/privacy/consent/${userId}`, {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify({
+          userId,
+          emotionSensingConsent: true,
+          memoryConsent: cMemory.checked,
+          emotionHistoryConsent: cHistory.checked,
+          faceAnalysisConsent: cFace.checked,
+          ioTConsent: cIoT.checked,
+          iotConsent: cIoT.checked,
+          dataStorageConsent: cMemory.checked,
+          anonymizationEnabled: true
+        })
+      });
+      add('ai', 'Consent saved. Sensitive collection stays off unless you enable it.');
+    };
+
+    exportBtn.onclick = async () => {
+      const r = await fetch(`${api}/api/privacy/export/${userId}`, { headers: headers() });
+      const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `neurosync-export-${userId}.json`;
+      a.click();
+    };
+
+    deleteBtn.onclick = async () => {
+      if (!confirm('Delete NeuroSync history permanently for this device user id?')) return;
+      await fetch(`${api}/api/privacy/memory/${userId}`, { method: 'DELETE', headers: headers() });
+      add('ai', 'History deleted. You can keep chatting with memory off.');
+      loadConsent();
+    };
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      add('user', text);
+      const r = await fetch(`${api}/api/emotion/detect`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ text, userId })
+      });
+      if (r.status === 401) {
+        add('ai', 'API key required in production. Set X-Api-Key in the privacy panel.');
+        return;
+      }
+      const data = await r.json();
+      const ar = data.adaptiveResponse || {};
+      const p = ar.parameters || {};
+      const emo = data.emotion || {};
+      modeChip.textContent = p.interactionMode || '—';
+      uncChip.textContent = p.uncertainty || emo.uncertainty || '—';
+      safeChip.textContent = p.safetyLevel || 'Normal';
+      const b = p.baseline;
+      baseChip.textContent = b && b.baselineConfidence != null ? Number(b.baselineConfidence).toFixed(2) : 'n/a';
+      signals.innerHTML = '';
+      const sigs = p.signalEstimates || emo.signalEstimates || {};
+      Object.entries(sigs).slice(0, 6).forEach(([k, v]) => {
+        const s = document.createElement('span');
+        s.className = 'sig';
+        s.textContent = `${k} ${Number(v).toFixed(2)}`;
+        signals.appendChild(s);
+      });
+      add('ai', ar.message || '…', `${p.uncertainty || ''} · ${p.interactionMode || ''}`);
+      if (p.consentHint) add('ai', p.consentHint);
+      if (p.actionOffer) {
+        actionOffer.style.display = 'block';
+        actionOffer.textContent = p.actionOffer + (p.iotBlocked ? ' (IoT consent is off)' : ' Reply “yes quiet mode” if you want.');
+      } else {
+        actionOffer.style.display = 'none';
+      }
+    }
+
+    send.onclick = send;
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    loadConsent().catch(() => {});
+  </script>
+</body>
+</html>

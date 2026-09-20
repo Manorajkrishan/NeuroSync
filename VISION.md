@@ -1,4 +1,8 @@
-# NeuroSync Vision — Privacy-First Emotion-Aware Companion
+## V1 freeze (do this first)
+
+See **`docs/V1_REQUIREMENTS.md`**. No voice / wearables / real IoT / new facial product features until `v1.0.0`.
+
+**Positioning:** emotion-aware wellbeing companion / affective computing — **not** a mental-health AI product.
 
 > **One-sentence pitch:** NeuroSync is a privacy-first, emotion-aware AI companion that learns an individual's emotional baseline from multimodal signals and safely adapts conversations, digital experiences and connected environments to support their wellbeing.
 

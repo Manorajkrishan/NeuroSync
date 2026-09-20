@@ -4,7 +4,13 @@
 
 NeuroSync understands emotional *signals* from conversation, responds like a careful companion, learns what helps *you* over time, and — only when you ask — can adapt digital/IoT environments.
 
-> Full vision, old-vs-new comparison, and roadmap: see **[VISION.md](VISION.md)**.
+> Full vision: **[VISION.md](VISION.md)** · Frozen V1 scope: **[docs/V1_REQUIREMENTS.md](docs/V1_REQUIREMENTS.md)**
+
+**Current milestone:** NeuroSync V1 — Safety & Evaluation Release (toward `v1.0.0`)
+
+Positioning: **emotion-aware wellbeing companion / affective computing** — not a mental-health diagnostic product.
+
+**Deploy / auth / secrets:** see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
 ## What works today (V1 → early V2)
 

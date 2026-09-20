@@ -624,6 +624,16 @@ function displayAdaptiveResponse(response) {
     // Add AI response to chat (with optional "Wrong? Correct" for text-based flow)
     addChatMessage(response.message, 'ai', opts && (opts.showCorrect === true) ? { showCorrect: true, userText: opts.userText || window._lastEmotionUserText } : undefined);
 
+    // Developer insights only — never the chat bubble
+    if (response.parameters && response.parameters.developerInsights) {
+        window.__neurosyncInsights = response.parameters.developerInsights;
+        const insightsEl = document.getElementById('devInsights');
+        if (insightsEl) {
+            const d = response.parameters.developerInsights;
+            insightsEl.textContent = `Intent ${d.intent || '—'} · Mode ${d.mode || '—'} · Safety ${d.safety || '—'} · Signal ${d.primarySignal || '—'} · score ${d.modelScore != null ? Math.round(d.modelScore * 100) : '—'}%`;
+        }
+    }
+
     // Update avatar if emotion changed
     if (response.emotion !== undefined) {
         const emotion = getEmotionString(response.emotion);
@@ -641,8 +651,15 @@ function displayAdaptiveResponse(response) {
 function displayMultiLayerResult(result) {
     if (!result) return;
 
-    const message = `Multi-layer emotion detected: ${result.primaryEmotion} (${Math.round(result.overallConfidence * 100)}% confidence)`;
-    addChatMessage(message, 'ai');
+    // Do not dump multi-layer confidence into the companion chat bubble
+    window.__neurosyncInsights = Object.assign({}, window.__neurosyncInsights || {}, {
+        multilayer: result.primaryEmotion,
+        overallConfidence: result.overallConfidence
+    });
+    if (result.primaryEmotion) {
+        updateCompanionAvatar(String(result.primaryEmotion).toLowerCase());
+    }
+}    addChatMessage(message, 'ai');
     updateCompanionAvatar(result.primaryEmotion?.toLowerCase() || 'neutral');
 }
 

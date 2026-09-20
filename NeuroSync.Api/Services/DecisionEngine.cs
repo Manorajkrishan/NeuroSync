@@ -4,8 +4,8 @@ using NeuroSync.IoT;
 namespace NeuroSync.Api.Services;
 
 /// <summary>
-/// Decision engine that generates adaptive responses based on detected emotions.
-/// Enhanced with emotional intelligence and conversation memory.
+/// Decision engine: safety → emotion context → companion mode → response.
+/// Does not diagnose. IoT only when the user asks.
 /// </summary>
 public class DecisionEngine
 {
@@ -15,14 +15,20 @@ public class DecisionEngine
     private readonly ConversationMemory? _conversationMemory;
     private readonly EmotionalIntelligence? _emotionalIntelligence;
     private readonly BestFriendCompanionService? _companion;
+    private readonly SafetyGateService? _safetyGate;
+    private readonly CompanionModeService? _modes;
+    private readonly EmotionalBaselineService? _baseline;
 
     public DecisionEngine(
-        IoTDeviceSimulator iotSimulator, 
-        RealIoTController? realIoTController, 
+        IoTDeviceSimulator iotSimulator,
+        RealIoTController? realIoTController,
         ILogger<DecisionEngine> logger,
         ConversationMemory? conversationMemory = null,
         EmotionalIntelligence? emotionalIntelligence = null,
-        BestFriendCompanionService? companion = null)
+        BestFriendCompanionService? companion = null,
+        SafetyGateService? safetyGate = null,
+        CompanionModeService? modes = null,
+        EmotionalBaselineService? baseline = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
@@ -30,49 +36,60 @@ public class DecisionEngine
         _conversationMemory = conversationMemory;
         _emotionalIntelligence = emotionalIntelligence;
         _companion = companion;
+        _safetyGate = safetyGate;
+        _modes = modes;
+        _baseline = baseline;
     }
 
-    /// <summary>
-    /// Processes an emotion and generates adaptive responses with emotional intelligence.
-    /// </summary>
     public AdaptiveResponse GenerateResponse(EmotionResult emotionResult, string? userId = "default", string? userMessage = null)
     {
         userId ??= "default";
-
-        // Best-friend learning + self-thinking about the owner
-        CompanionTurn? turn = null;
-        if (_companion != null && !string.IsNullOrWhiteSpace(userMessage))
-        {
-            turn = _companion.BuildTurn(userId, userMessage, emotionResult);
-        }
 
         ConversationContext? context = null;
         if (_conversationMemory != null)
             context = _conversationMemory.GetOrCreateContext(userId);
 
-        string message;
-        if (_emotionalIntelligence != null)
+        var safety = _safetyGate?.Assess(userMessage, context)
+                     ?? new SafetyAssessment();
+
+        CompanionTurn? turn = null;
+        if (_companion != null && !string.IsNullOrWhiteSpace(userMessage))
         {
-            // Pass userMessage to generate contextual responses
+            turn = _companion.BuildTurn(userId, userMessage, emotionResult);
+            if (safety.BlockNormalCompanionFlow)
+                turn.IsCrisis = true;
+        }
+
+        var mode = _modes?.Resolve(userMessage, emotionResult.Emotion, safety.Level)
+                   ?? CompanionInteractionMode.Talk;
+
+        string message;
+        if (safety.BlockNormalCompanionFlow && _emotionalIntelligence != null)
+        {
+            message = _emotionalIntelligence.PersonalizeMessage(
+                safety.Guidance,
+                turn?.Profile,
+                turn ?? new CompanionTurn { IsCrisis = true });
+        }
+        else if (_emotionalIntelligence != null)
+        {
             message = _emotionalIntelligence.GenerateEmpatheticMessage(emotionResult.Emotion, context, userMessage);
 
-            // Lead with what we understood emotionally (best-friend acknowledgment)
             if (!string.IsNullOrEmpty(emotionResult.UnderstoodAs) &&
                 !EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage) &&
                 emotionResult.Emotion != EmotionType.Neutral)
             {
-                // Don't double-prefix if message already mirrors it
                 if (!message.Contains("I understand you're feeling", StringComparison.OrdinalIgnoreCase))
                     message = $"{emotionResult.UnderstoodAs} {message}";
             }
 
-            // Personalized greeting with owner's name
             if (EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage) && !string.IsNullOrEmpty(turn?.DisplayName))
-            {
                 message = $"{turn.DisplayName} — {message}";
-            }
 
             message = _emotionalIntelligence.PersonalizeMessage(message, turn?.Profile, turn);
+
+            if (_modes != null && !EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage))
+                message = _modes.ShapeMessage(message, mode, turn?.DisplayName);
         }
         else
         {
@@ -80,15 +97,20 @@ public class DecisionEngine
         }
 
         string? followUpQuestion = null;
-        if (_emotionalIntelligence != null && turn?.IsCrisis != true)
-            followUpQuestion = _emotionalIntelligence.GenerateFollowUpQuestion(emotionResult.Emotion, userMessage ?? emotionResult.OriginalText, context);
+        if (!safety.BlockNormalCompanionFlow && _emotionalIntelligence != null && turn?.IsCrisis != true)
+        {
+            followUpQuestion = _modes != null &&
+                               emotionResult.Emotion is EmotionType.Sad or EmotionType.Anxious or EmotionType.Frustrated
+                ? _modes.ModeChoicePrompt(mode)
+                : _emotionalIntelligence.GenerateFollowUpQuestion(
+                    emotionResult.Emotion, userMessage ?? emotionResult.OriginalText, context);
+        }
 
-        // Prefer gentle learning question over generic follow-up sometimes
         if (string.IsNullOrEmpty(followUpQuestion) && !string.IsNullOrEmpty(turn?.LearningQuestion))
             followUpQuestion = turn.LearningQuestion;
 
         string? encouragement = null;
-        if (_emotionalIntelligence != null && context != null)
+        if (!safety.BlockNormalCompanionFlow && _emotionalIntelligence != null && context != null)
             encouragement = _emotionalIntelligence.GenerateEncouragement(context);
 
         var response = new AdaptiveResponse
@@ -98,56 +120,56 @@ public class DecisionEngine
         };
 
         var isGreeting = EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage);
-        var parameters = new Dictionary<string, object>();
+        var parameters = new Dictionary<string, object>
+        {
+            ["disclaimer"] =
+                "NeuroSync is a privacy-first wellbeing companion. It does not diagnose mental illness or replace therapists.",
+            ["safetyLevel"] = safety.Level.ToString(),
+            ["interactionMode"] = mode.ToString()
+        };
 
-        if (turn?.IsCrisis == true)
+        if (safety.Level != SafetyLevel.Normal)
+        {
+            parameters["safetyReason"] = safety.Reason;
+            parameters["safetyGuidance"] = safety.Guidance;
+            if (!string.IsNullOrEmpty(safety.CrisisResourceHint))
+                parameters["crisisResources"] = safety.CrisisResourceHint;
+        }
+
+        if (safety.BlockNormalCompanionFlow)
         {
             response.Action = "crisis_support";
-            parameters["mode"] = "best_friend_crisis";
-            parameters["priority"] = "immediate_support";
-            parameters["resources"] = "Please contact local emergency services or a crisis helpline if you are in danger.";
+            parameters["mode"] = "safety_protocol";
+            parameters["priority"] = "human_support_first";
+            parameters["resources"] = safety.CrisisResourceHint
+                ?? "Please contact local emergency services or a crisis helpline if you are in danger.";
         }
         else if (isGreeting)
         {
             response.Action = "converse";
-            parameters["mode"] = "best_friend";
+            parameters["mode"] = "companion";
         }
         else
         {
-            switch (emotionResult.Emotion)
+            response.Action = mode switch
             {
-                case EmotionType.Happy:
-                    response.Action = "celebrate_with_friend";
-                    parameters["suggestion"] = "I'm genuinely happy for you — tell me more?";
-                    break;
-                case EmotionType.Sad:
-                    response.Action = "support_wellbeing";
-                    parameters["suggestion"] = turn?.PersonalizedHelp != null
-                        ? $"I'm here. Want to try {turn.PersonalizedHelp}? Or just talk — either is fine."
-                        : "I'm here if you want to talk. No pressure.";
-                    break;
-                case EmotionType.Angry:
-                    response.Action = "supportive_listen";
-                    parameters["suggestion"] = "I've got you. Vent it out — I'm listening.";
-                    break;
-                case EmotionType.Anxious:
-                    response.Action = "calm_companion";
-                    parameters["suggestion"] = turn?.PersonalizedHelp != null
-                        ? $"One step at a time. {turn.PersonalizedHelp} has helped you before — want that, or just company?"
-                        : "We can take this one breath at a time. What's the loudest worry right now?";
-                    break;
-                case EmotionType.Frustrated:
-                    response.Action = "problem_friend";
-                    parameters["suggestion"] = "That sounds rough. Want to unpack it together?";
-                    break;
-                case EmotionType.Calm:
-                case EmotionType.Excited:
-                case EmotionType.Neutral:
-                default:
-                    response.Action = "converse";
-                    parameters["suggestion"] = "I'm with you. What's on your mind?";
-                    break;
-            }
+                CompanionInteractionMode.Listen => "supportive_listen",
+                CompanionInteractionMode.ProblemSolving => "problem_friend",
+                CompanionInteractionMode.Focus => "focus_mode",
+                CompanionInteractionMode.Calm => "calm_companion",
+                CompanionInteractionMode.Companion => "companion_chat",
+                _ => "converse"
+            };
+            parameters["suggestion"] = mode switch
+            {
+                CompanionInteractionMode.Listen => "I'm listening. No pressure.",
+                CompanionInteractionMode.ProblemSolving => "One small next step when you're ready.",
+                CompanionInteractionMode.Focus => "Want quiet mode / Do Not Disturb style support?",
+                CompanionInteractionMode.Calm => turn?.PersonalizedHelp != null
+                    ? $"Want {turn.PersonalizedHelp}, or just company?"
+                    : "Want quiet mode or a short reset?",
+                _ => "I'm with you. What's on your mind?"
+            };
         }
 
         if (turn != null)
@@ -157,7 +179,8 @@ public class DecisionEngine
             if (!string.IsNullOrEmpty(turn.DisplayName))
                 parameters["ownerName"] = turn.DisplayName;
             if (turn.HasConcerningPattern)
-                parameters["support_note"] = "I've noticed things have been heavy lately. I'm still here — we don't have to fix everything today.";
+                parameters["support_note"] =
+                    "I've noticed things have felt heavier than your usual pattern. I'm here — we don't have to fix everything today. This is not a diagnosis.";
             if (!string.IsNullOrEmpty(turn.PersonalizedHelp))
                 parameters["knownHelp"] = turn.PersonalizedHelp;
             var known = turn.Profile.GetWhatIKnow();
@@ -165,13 +188,30 @@ public class DecisionEngine
                 parameters["whatIKnowAboutYou"] = known;
         }
 
-        // Surface emotional understanding to the client/UI
         parameters["understoodAs"] = emotionResult.UnderstoodAs ?? $"You're feeling {emotionResult.Emotion}";
         parameters["intensity"] = emotionResult.Intensity;
         if (!string.IsNullOrEmpty(emotionResult.LikelyCause))
             parameters["likelyCause"] = emotionResult.LikelyCause;
         if (emotionResult.SecondaryEmotion.HasValue)
             parameters["secondaryEmotion"] = emotionResult.SecondaryEmotion.Value.ToString();
+        if (emotionResult.SignalEstimates.Count > 0)
+            parameters["signalEstimates"] = emotionResult.SignalEstimates;
+
+        var baseline = _baseline?.GetSnapshot(userId);
+        if (baseline != null && baseline.SampleCount >= 3)
+        {
+            parameters["baseline"] = new
+            {
+                baseline.BaselineMoodScore,
+                baseline.RecentMoodScore,
+                baseline.Deviation,
+                baseline.IsSignificantlyDifferent,
+                baseline.Summary
+            };
+            if (baseline.IsSignificantlyDifferent && !safety.BlockNormalCompanionFlow)
+                parameters["baselineCheckIn"] =
+                    "You seem a bit different from your usual pattern. Want to talk, or switch off for a while?";
+        }
 
         if (!string.IsNullOrEmpty(followUpQuestion))
             parameters["followUpQuestion"] = followUpQuestion;
@@ -185,7 +225,8 @@ public class DecisionEngine
         {
             var mostCommon = _conversationMemory.GetMostCommonEmotion(userId);
             if (mostCommon != null && mostCommon.Frequency > 3)
-                parameters["insight"] = $"I've noticed you often feel {mostCommon.Emotion.ToString().ToLower()}. We can face that together whenever you want.";
+                parameters["insight"] =
+                    $"I've noticed {mostCommon.Emotion.ToString().ToLower()} shows up often in our chats. We can face that together whenever you want — still not a diagnosis.";
         }
 
         response.Parameters = parameters;
@@ -194,45 +235,34 @@ public class DecisionEngine
         if (_conversationMemory != null && !string.IsNullOrEmpty(userMessage))
             _conversationMemory.AddEntry(userId, userMessage, emotionResult, response, followUpQuestion);
 
-        _logger.LogInformation("Best-friend response for {UserId}: emotion={Emotion}, crisis={Crisis}",
-            userId, emotionResult.Emotion, turn?.IsCrisis == true);
+        _logger.LogInformation(
+            "Companion response for {UserId}: emotion={Emotion}, mode={Mode}, safety={Safety}",
+            userId, emotionResult.Emotion, mode, safety.Level);
         return response;
     }
 
-    /// <summary>
-    /// Gets default message if emotional intelligence is not available.
-    /// </summary>
     private string GetDefaultMessage(EmotionType emotion)
     {
         return emotion switch
         {
-            EmotionType.Happy => "Great to see you're feeling happy! Let's keep that positive energy going!",
-            EmotionType.Sad => "I notice you might be feeling down. How about some calming activities?",
-            EmotionType.Angry => "I sense some frustration. Let's create a calmer environment for you.",
-            EmotionType.Anxious => "Feeling anxious? Let's help you relax.",
-            EmotionType.Calm => "You're in a calm state. Perfect for focused work!",
-            EmotionType.Excited => "You're excited! Let's channel that energy productively!",
-            EmotionType.Frustrated => "I notice some frustration. How can I help?",
+            EmotionType.Happy => "Glad you're feeling good. Want to share what's going well?",
+            EmotionType.Sad => "That sounds heavy. Want me to listen, help work through it, or distract you?",
+            EmotionType.Angry => "I hear the frustration. I'm listening — no lectures.",
+            EmotionType.Anxious => "Anxiety is loud sometimes. Want calm mode, or to unpack one worry?",
+            EmotionType.Calm => "Calm is a good place to be. Want focus mode?",
+            EmotionType.Excited => "Love the energy. Tell me more?",
+            EmotionType.Frustrated => "That sounds stuck. Want a small next step, or just to vent?",
             _ => "I'm here with you. How are you feeling?"
         };
     }
 
-    /// <summary>
-    /// IoT only when the user asks for lights/music/environment — not on every message.
-    /// </summary>
-    public static bool ShouldTriggerIoT(string? userMessage)
-    {
-        return EmotionalIntelligence.IsIoTRequest(userMessage);
-    }
+    public static bool ShouldTriggerIoT(string? userMessage) =>
+        EmotionalIntelligence.IsIoTRequest(userMessage);
 
-    /// <summary>
-    /// Gets IoT actions for the detected emotion.
-    /// </summary>
     public async Task<List<IoTAction>> GetIoTActionsAsync(EmotionType emotion)
     {
         var actions = _iotSimulator.ProcessEmotion(emotion);
-        
-        // Try to execute on real devices if configured (await to ensure parameters are updated)
+
         if (_realIoTController != null)
         {
             foreach (var action in actions)
@@ -241,22 +271,17 @@ public class DecisionEngine
                 {
                     var result = await _realIoTController.ExecuteActionAsync(action);
                     if (result)
-                    {
-                        _logger.LogInformation($"Successfully executed IoT action: {action.ActionType} on {action.DeviceId}");
-                    }
+                        _logger.LogInformation("Executed IoT action: {Action} on {Device}", action.ActionType, action.DeviceId);
                     else
-                    {
-                        _logger.LogWarning($"Failed to execute IoT action {action.ActionType} on {action.DeviceId}");
-                    }
+                        _logger.LogWarning("Failed IoT action {Action} on {Device}", action.ActionType, action.DeviceId);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, $"Error executing IoT action {action.ActionType}: {ex.Message}");
+                    _logger.LogWarning(ex, "Error executing IoT action {Action}", action.ActionType);
                 }
             }
         }
-        
+
         return actions;
     }
 }
-

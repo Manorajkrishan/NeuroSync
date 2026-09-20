@@ -1,8 +1,31 @@
-# NeuroSync - Emotion-Aware Intelligent System
+# NeuroSync — Emotion-Aware AI Companion & Intelligent Environment
 
-## Overview
+**Privacy-first wellbeing companion** (not a therapist, not a diagnostic tool).
 
-**NeuroSync** is a real-time emotion-aware intelligent system that detects human emotions from text input and adapts digital and IoT environments accordingly. The system uses ML.NET for emotion classification, SignalR for real-time communication, and simulates IoT device responses based on detected emotional states.
+NeuroSync understands emotional *signals* from conversation, responds like a careful companion, learns what helps *you* over time, and — only when you ask — can adapt digital/IoT environments.
+
+> Full vision, old-vs-new comparison, and roadmap: see **[VISION.md](VISION.md)**.
+
+## What works today (V1 → early V2)
+
+- Text emotion detection (ML.NET + understanding layer + multi-signal estimates)
+- Safety gate → companion interaction modes (Listen / Talk / Calm / Focus / ProblemSolving / Companion)
+- Best-friend style conversation with opt-in profile learning
+- Personal emotional baseline + privacy timeline (`/api/privacy/...`)
+- Conversation memory with user delete/view
+- Facial wellbeing cues (browser), device sync, IoT simulator (real devices optional)
+- SignalR real-time updates
+
+## Explicitly not the product
+
+- Diagnosing depression, anxiety, or any mental illness
+- Replacing therapists or human relationships
+- Always-on camera/mic surveillance
+- Auto-changing your home without permission
+
+## Overview (architecture)
+
+**NeuroSync** is a real-time emotion-aware intelligent system that detects emotional *signals* from text (and optional multimodal inputs), runs a safety layer, then adapts conversation — and optionally IoT — with user consent.
 
 ## Features
 

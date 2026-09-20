@@ -208,13 +208,17 @@ public class CompanionFeatureTests : IDisposable
     public void DecisionEngine_Greeting_ShouldConverseWithoutForcingIoTPath()
     {
         var ei = new EmotionalIntelligence(Mock.Of<ILogger<EmotionalIntelligence>>());
+        var memory = CreateMemory();
         var engine = new DecisionEngine(
             new NeuroSync.IoT.IoTDeviceSimulator(),
             null,
             Mock.Of<ILogger<DecisionEngine>>(),
-            CreateMemory(),
+            memory,
             ei,
-            null);
+            null,
+            new SafetyGateService(ei, Mock.Of<ILogger<SafetyGateService>>()),
+            new CompanionModeService(),
+            new EmotionalBaselineService(memory, Mock.Of<ILogger<EmotionalBaselineService>>()));
 
         var result = new EmotionResult(EmotionType.Neutral, 0.9f, "hi")
         {
@@ -224,7 +228,38 @@ public class CompanionFeatureTests : IDisposable
 
         response.Action.Should().Be("converse");
         response.Message.Should().NotBeNullOrWhiteSpace();
+        response.Parameters.Should().ContainKey("disclaimer");
         DecisionEngine.ShouldTriggerIoT("hi").Should().BeFalse();
+    }
+
+    [Fact]
+    public void SafetyGate_CrisisLanguage_ShouldBlockNormalFlow()
+    {
+        var ei = new EmotionalIntelligence(Mock.Of<ILogger<EmotionalIntelligence>>());
+        var gate = new SafetyGateService(ei, Mock.Of<ILogger<SafetyGateService>>());
+        var assessment = gate.Assess("I want to end my life");
+        assessment.Level.Should().Be(SafetyLevel.ImmediateDanger);
+        assessment.BlockNormalCompanionFlow.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CompanionMode_QuietRequest_ShouldResolveCalm()
+    {
+        var modes = new CompanionModeService();
+        modes.Resolve("please quiet mode", EmotionType.Anxious, SafetyLevel.Normal)
+            .Should().Be(CompanionInteractionMode.Calm);
+        modes.Resolve("just listen please", EmotionType.Sad, SafetyLevel.Normal)
+            .Should().Be(CompanionInteractionMode.Listen);
+    }
+
+    [Fact]
+    public void Understanding_TiredOfEverything_ShouldAddMultiSignals()
+    {
+        var understanding = new EmotionUnderstandingService(Mock.Of<ILogger<EmotionUnderstandingService>>());
+        var ml = new EmotionResult(EmotionType.Neutral, 0.4f, "I'm tired of everything");
+        var result = understanding.Understand(ml, "I'm tired of everything");
+        result.SignalEstimates.Should().ContainKey("Fatigue");
+        result.Disclaimer.Should().Contain("does not diagnose");
     }
 
     private ConversationMemory CreateMemory()

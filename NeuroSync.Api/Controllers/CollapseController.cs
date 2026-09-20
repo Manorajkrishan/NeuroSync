@@ -29,7 +29,14 @@ public class CollapseController : ControllerBase
         {
             userId ??= Request.Headers["X-User-Id"].FirstOrDefault() ?? "default";
             var assessment = await _collapseService.CalculateCollapseRiskAsync(userId);
-            return Ok(assessment);
+            return Ok(new
+            {
+                disclaimer =
+                    "Wellbeing load estimates only. NeuroSync does NOT diagnose depression, anxiety, burnout, or any mental illness. " +
+                    "These scores are research/prototype signals for optional check-ins — seek a qualified professional for clinical concerns.",
+                notADiagnosis = true,
+                assessment
+            });
         }
         catch (Exception ex)
         {

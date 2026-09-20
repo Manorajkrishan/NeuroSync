@@ -31,7 +31,11 @@ public class DecisionEngineTests
             null,
             Mock.Of<ILogger<DecisionEngine>>(),
             conversationMemory,
-            _emotionalIntelligence
+            _emotionalIntelligence,
+            null,
+            new SafetyGateService(_emotionalIntelligence, Mock.Of<ILogger<SafetyGateService>>()),
+            new CompanionModeService(),
+            new EmotionalBaselineService(conversationMemory, Mock.Of<ILogger<EmotionalBaselineService>>())
         );
     }
 

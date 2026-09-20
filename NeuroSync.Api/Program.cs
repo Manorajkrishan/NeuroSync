@@ -205,6 +205,9 @@ builder.Services.AddSingleton<BestFriendCompanionService>();
 builder.Services.AddSingleton<AdaptivePersonalityService>();
 builder.Services.AddSingleton<DeviceSyncService>();
 builder.Services.AddSingleton<FacialWellbeingService>();
+builder.Services.AddSingleton<SafetyGateService>();
+builder.Services.AddSingleton<CompanionModeService>();
+builder.Services.AddSingleton<EmotionalBaselineService>();
 
 // Add Person Memory
 builder.Services.AddSingleton<PersonMemory>();
@@ -215,6 +218,20 @@ builder.Services.AddScoped<ActionExecutor>();
 // Add Real-World Data Collector for continuous learning
 builder.Services.AddSingleton<RealWorldDataCollector>();
 
+// Add Decision Engine (safety → modes → companion)
+builder.Services.AddScoped<DecisionEngine>(sp =>
+{
+    var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
+    var realIoTController = sp.GetService<RealIoTController>();
+    var logger = sp.GetRequiredService<ILogger<DecisionEngine>>();
+    var conversationMemory = sp.GetService<ConversationMemory>();
+    var emotionalIntelligence = sp.GetService<EmotionalIntelligence>();
+    var companion = sp.GetService<BestFriendCompanionService>();
+    var safetyGate = sp.GetService<SafetyGateService>();
+    var modes = sp.GetService<CompanionModeService>();
+    var baseline = sp.GetService<EmotionalBaselineService>();
+    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion, safetyGate, modes, baseline);
+});
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>
 {
@@ -248,18 +265,6 @@ builder.Services.AddSingleton<ContextualAwarenessService>(sp =>
 // Add Ethical AI Framework Service
 builder.Services.AddSingleton<EthicalAIFrameworkService>();
 
-// Add Decision Engine
-builder.Services.AddScoped<DecisionEngine>(sp =>
-{
-    var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
-    var realIoTController = sp.GetService<RealIoTController>();
-    var logger = sp.GetRequiredService<ILogger<DecisionEngine>>();
-    var conversationMemory = sp.GetService<ConversationMemory>();
-    var emotionalIntelligence = sp.GetService<EmotionalIntelligence>();
-    var companion = sp.GetService<BestFriendCompanionService>();
-    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion);
-});
-
 // Add Advanced Action Orchestrator
 builder.Services.AddScoped<AdvancedActionOrchestrator>(sp =>
 {
@@ -270,7 +275,7 @@ builder.Services.AddScoped<AdvancedActionOrchestrator>(sp =>
     return new AdvancedActionOrchestrator(logger, realIoTController, iotSimulator, decisionEngine);
 });
 
-// Human OS v2.0 Services
+// Human OS / wellbeing services (estimates only — see VISION.md; not clinical diagnosis)
 builder.Services.AddScoped<EmotionalOSDashboardService>(sp =>
 {
     var context = sp.GetRequiredService<NeuroSyncDbContext>();

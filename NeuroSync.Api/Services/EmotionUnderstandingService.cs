@@ -78,8 +78,13 @@ public class EmotionUnderstandingService
         // 5) Likely cause
         result.LikelyCause = DetectLikelyCause(lower);
 
-        // 6) Human-readable understanding
+        // 6) Uncertain multi-signal estimates (vision: not a single label)
+        result.SignalEstimates = BuildSignalEstimates(lower, result);
+
+        // 7) Human-readable understanding
         result.UnderstoodAs = BuildUnderstoodAs(result);
+        result.Disclaimer =
+            "Emotion signals are uncertain estimates for wellbeing support. NeuroSync does not diagnose mental illness or replace professional care.";
 
         _logger.LogInformation(
             "Understood emotion: {Emotion} ({Intensity}, {Confidence:P0}) cause={Cause} | {Text}",
@@ -87,6 +92,37 @@ public class EmotionUnderstandingService
             text.Length > 60 ? text[..60] + "…" : text);
 
         return result;
+    }
+
+    private static Dictionary<string, float> BuildSignalEstimates(string lower, EmotionResult result)
+    {
+        var signals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        void Set(string key, float value)
+        {
+            if (value <= 0) return;
+            signals[key] = Math.Clamp(value, 0f, 1f);
+        }
+
+        Set(result.Emotion.ToString(), result.Confidence);
+        if (result.SecondaryEmotion.HasValue)
+            Set(result.SecondaryEmotion.Value.ToString(), Math.Max(0.35f, result.Confidence * 0.7f));
+
+        if (ContainsAny(lower, "lonely", "alone", "no one", "nobody", "isolated"))
+            Set("Loneliness", 0.72f);
+        if (ContainsAny(lower, "stress", "stressed", "pressure", "overwhelmed", "anxious", "anxiety"))
+            Set("Stress", 0.65f);
+        if (ContainsAny(lower, "tired", "exhausted", "drained", "fatigue", "no energy", "slept"))
+            Set("Fatigue", 0.6f);
+        if (ContainsAny(lower, "hopeless", "pointless", "no point", "give up", "worthless"))
+            Set("HopelessnessLanguage", 0.45f);
+        if (ContainsAny(lower, "tired of everything", "sick of everything", "can't do this anymore"))
+        {
+            Set("Fatigue", Math.Max(signals.GetValueOrDefault("Fatigue"), 0.7f));
+            Set("Stress", Math.Max(signals.GetValueOrDefault("Stress"), 0.55f));
+        }
+
+        return signals;
     }
 
     private static bool HasFeelingWords(string lower) =>

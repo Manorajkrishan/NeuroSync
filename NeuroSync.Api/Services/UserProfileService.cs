@@ -341,6 +341,27 @@ public class UserProfileService
         }
     }
 
+    /// <summary>Privacy control: remove stored profile for a user.</summary>
+    public bool DeleteProfile(string userId)
+    {
+        _profiles.TryRemove(userId, out _);
+        try
+        {
+            var filePath = Path.Combine(_storagePath, $"{userId}.json");
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+                _logger.LogInformation("Deleted profile for {UserId}", userId);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting profile for {UserId}", userId);
+            return false;
+        }
+    }
+
     /// <summary>
     /// Loads profiles from disk.
     /// </summary>

@@ -22,6 +22,16 @@ public class EmotionResult
     /// <summary>Secondary emotion if mixed feelings are present.</summary>
     public EmotionType? SecondaryEmotion { get; set; }
 
+    /// <summary>
+    /// Uncertain multi-signal estimates (0–1). Not diagnoses — weak evidence for support.
+    /// Example keys: Loneliness, Stress, Fatigue, HopelessnessLanguage.
+    /// </summary>
+    public Dictionary<string, float> SignalEstimates { get; set; } = new();
+
+    /// <summary>Always surfaced so clients never treat estimates as clinical facts.</summary>
+    public string Disclaimer { get; set; } =
+        "Emotion signals are uncertain estimates for wellbeing support. NeuroSync does not diagnose mental illness or replace professional care.";
+
     public EmotionResult()
     {
         Timestamp = DateTime.UtcNow;

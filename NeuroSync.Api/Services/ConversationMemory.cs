@@ -311,5 +311,69 @@ public class ConversationMemory
 
         return false;
     }
+
+    /// <summary>
+    /// Privacy control: clear in-memory + persisted conversation data for a user.
+    /// </summary>
+    public void ClearUserData(string userId)
+    {
+        _conversations.TryRemove(userId, out _);
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();
+            db.ConversationEntries.RemoveRange(db.ConversationEntries.Where(e => e.UserId == userId));
+            db.EmotionPatterns.RemoveRange(db.EmotionPatterns.Where(p => p.UserId == userId));
+            db.ConversationSessions.RemoveRange(db.ConversationSessions.Where(s => s.UserId == userId));
+            db.SaveChanges();
+            _logger.LogInformation("Cleared conversation memory for {UserId}", userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clear DB conversation memory for {UserId}", userId);
+        }
+    }
+
+    /// <summary>
+    /// Privacy-controlled emotional timeline (daily aggregates from history).
+    /// </summary>
+    public List<object> GetEmotionalTimeline(string userId, int days = 14)
+    {
+        var context = GetOrCreateContext(userId);
+        var cutoff = DateTime.UtcNow.Date.AddDays(-(Math.Clamp(days, 1, 90) - 1));
+        return context.History
+            .Where(h => h.DetectedEmotion != null && h.Timestamp.Date >= cutoff)
+            .GroupBy(h => h.Timestamp.Date)
+            .OrderBy(g => g.Key)
+            .Select(g =>
+            {
+                var moods = g.Select(x => MoodOrdinal(x.DetectedEmotion!.Emotion)).ToList();
+                var avg = moods.Average();
+                return (object)new
+                {
+                    date = g.Key.ToString("yyyy-MM-dd"),
+                    averageMood = Math.Round(avg, 1),
+                    dominantEmotion = g.GroupBy(x => x.DetectedEmotion!.Emotion)
+                        .OrderByDescending(x => x.Count())
+                        .First().Key.ToString(),
+                    entries = g.Count(),
+                    disclaimer = "Daily wellbeing estimates only — not a clinical chart."
+                };
+            })
+            .ToList();
+    }
+
+    private static double MoodOrdinal(EmotionType e) => e switch
+    {
+        EmotionType.Happy => 8,
+        EmotionType.Excited => 8.5,
+        EmotionType.Calm => 7,
+        EmotionType.Neutral => 5.5,
+        EmotionType.Frustrated => 3.5,
+        EmotionType.Anxious => 3,
+        EmotionType.Angry => 2.5,
+        EmotionType.Sad => 2,
+        _ => 5
+    };
 }
 

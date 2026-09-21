@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NeuroSync V1 ‚Äî Wellbeing Companion</title>
+  <title>NeuroSync V1 ó Wellbeing Companion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -82,6 +82,12 @@
     }
     .signals { display: flex; flex-wrap: wrap; gap: 6px; }
     .sig { font-size: .78rem; padding: 4px 8px; border-radius: 8px; background: rgba(61,155,122,.15); }
+    details.dev {
+      margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px;
+    }
+    details.dev summary {
+      cursor: pointer; color: var(--muted); font-size: .85rem; user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -90,8 +96,8 @@
       <h1>NeuroSync</h1>
       <p>Emotion-aware wellbeing companion. Not a diagnostic or therapy product. V1 Safety &amp; Evaluation demo.</p>
       <div class="chiprow">
-        <span class="chip">Mode <strong id="modeChip">‚Äî</strong></span>
-        <span class="chip">Uncertainty <strong id="uncChip">‚Äî</strong></span>
+        <span class="chip">Mode <strong id="modeChip">ó</strong></span>
+        <span class="chip">Uncertainty <strong id="uncChip">ó</strong></span>
         <span class="chip">Safety <strong id="safeChip">Normal</strong></span>
         <span class="chip">Baseline conf. <strong id="baseChip">n/a</strong></span>
       </div>
@@ -102,7 +108,7 @@
         <div id="chat"></div>
         <div id="actionOffer" class="offer"></div>
         <div class="composer">
-          <textarea id="input" placeholder="Say what‚Äôs going on‚Ä¶ (text only for V1)"></textarea>
+          <textarea id="input" placeholder="Say whatís going onÖ (text only for V1)"></textarea>
           <button id="send">Send</button>
         </div>
         <p class="note">Facial analysis is experimental and off by default. It never drives safety decisions.</p>
@@ -115,14 +121,18 @@
         <label><span>Emotion history</span><input type="checkbox" id="cHistory" /></label>
         <label><span>Face analysis (experimental)</span><input type="checkbox" id="cFace" /></label>
         <label><span>IoT / Quiet Mode actions</span><input type="checkbox" id="cIoT" /></label>
+        <label><span>Learning data sharing</span><input type="checkbox" id="cShare" /></label>
         <div style="display:flex; gap:8px; margin-top:12px;">
           <button class="secondary" id="saveConsent">Save consent</button>
           <button class="secondary" id="exportBtn">Export</button>
         </div>
         <button class="secondary" id="deleteBtn" style="width:100%; margin-top:8px;">Delete history permanently</button>
-        <h3 style="margin-top:18px;">Subtle signals</h3>
-        <div id="signals" class="signals"></div>
-        <p class="note" id="traceNote">Decision traces stay internal for debugging.</p>
+
+        <details class="dev" id="devPanel">
+          <summary>Developer / Explainability</summary>
+          <p class="note" id="devInsights">Insights appear here after a turn (never in chat).</p>
+          <div id="signals" class="signals" style="margin-top:8px;"></div>
+        </details>
       </aside>
     </div>
   </div>
@@ -141,21 +151,36 @@
       return h;
     }
 
-    function add(role, text, meta) {
+    function add(role, text) {
       const d = document.createElement('div');
       d.className = 'bubble ' + role;
       d.textContent = text;
-      if (meta) {
-        const m = document.createElement('div');
-        m.className = 'meta';
-        m.textContent = meta;
-        d.appendChild(m);
-      }
       chat.appendChild(d);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    add('ai', "Hey. I'm NeuroSync ‚Äî a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
+    function updateDevInsights(data) {
+      const d = data.developerInsights || {};
+      const insightsEl = document.getElementById('devInsights');
+      if (insightsEl) {
+        insightsEl.textContent =
+          `Intent ${d.intent || 'ó'} ∑ Mode ${data.mode || d.mode || 'ó'} ∑ Safety ${d.safety || 'ó'} ∑ Signal ${d.primarySignal || 'ó'} ∑ score ${d.modelScore != null ? Math.round(d.modelScore * 100) : 'ó'}% ∑ ${data.uncertainty || d.uncertainty || 'ó'}`;
+      }
+      modeChip.textContent = data.mode || d.mode || 'ó';
+      uncChip.textContent = data.uncertainty || d.uncertainty || 'ó';
+      safeChip.textContent = d.safety || 'Normal';
+      baseChip.textContent = d.baselineConfidence != null ? Number(d.baselineConfidence).toFixed(2) : 'n/a';
+      signals.innerHTML = '';
+      const sigs = d.signals || {};
+      Object.entries(sigs).slice(0, 6).forEach(([k, v]) => {
+        const s = document.createElement('span');
+        s.className = 'sig';
+        s.textContent = `${k} ${Number(v).toFixed(2)}`;
+        signals.appendChild(s);
+      });
+    }
+
+    add('ai', "Hey. I'm NeuroSync ó a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
 
     async function loadConsent() {
       const r = await fetch(`${api}/api/privacy/consent/${userId}`, { headers: headers() });
@@ -164,6 +189,7 @@
       cHistory.checked = !!c.emotionHistoryConsent;
       cFace.checked = !!c.faceAnalysisConsent;
       cIoT.checked = !!c.ioTConsent || !!c.iotConsent;
+      cShare.checked = !!c.dataSharingConsent;
     }
 
     saveConsent.onclick = async () => {
@@ -180,6 +206,7 @@
           ioTConsent: cIoT.checked,
           iotConsent: cIoT.checked,
           dataStorageConsent: cMemory.checked,
+          dataSharingConsent: cShare.checked,
           anonymizationEnabled: true
         })
       });
@@ -207,7 +234,8 @@
       if (!text) return;
       input.value = '';
       add('user', text);
-      const r = await fetch(`${api}/api/emotion/detect`, {
+      // V1 companion surface ó natural message only in chat
+      const r = await fetch(`${api}/api/companion/message`, {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({ text, userId })
@@ -217,27 +245,16 @@
         return;
       }
       const data = await r.json();
-      const ar = data.adaptiveResponse || {};
-      const p = ar.parameters || {};
-      const emo = data.emotion || {};
-      modeChip.textContent = p.interactionMode || '‚Äî';
-      uncChip.textContent = p.uncertainty || emo.uncertainty || '‚Äî';
-      safeChip.textContent = p.safetyLevel || 'Normal';
-      const b = p.baseline;
-      baseChip.textContent = b && b.baselineConfidence != null ? Number(b.baselineConfidence).toFixed(2) : 'n/a';
-      signals.innerHTML = '';
-      const sigs = p.signalEstimates || emo.signalEstimates || {};
-      Object.entries(sigs).slice(0, 6).forEach(([k, v]) => {
-        const s = document.createElement('span');
-        s.className = 'sig';
-        s.textContent = `${k} ${Number(v).toFixed(2)}`;
-        signals.appendChild(s);
-      });
-      add('ai', ar.message || '‚Ä¶', `${p.uncertainty || ''} ¬∑ ${p.interactionMode || ''}`);
-      if (p.consentHint) add('ai', p.consentHint);
-      if (p.actionOffer) {
+      if (!r.ok) {
+        add('ai', data.error || 'Something went wrong. Try again.');
+        return;
+      }
+      // Chat: ONLY companion message ó never emotion label / confidence
+      add('ai', data.message || 'Ö');
+      updateDevInsights(data);
+      if (data.actionOffer) {
         actionOffer.style.display = 'block';
-        actionOffer.textContent = p.actionOffer + (p.iotBlocked ? ' (IoT consent is off)' : ' Reply ‚Äúyes quiet mode‚Äù if you want.');
+        actionOffer.textContent = data.actionOffer + (data.iotBlocked ? ' (IoT consent is off)' : '');
       } else {
         actionOffer.style.display = 'none';
       }

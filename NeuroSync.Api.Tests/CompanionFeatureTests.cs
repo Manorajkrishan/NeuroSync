@@ -207,18 +207,7 @@ public class CompanionFeatureTests : IDisposable
     [Fact]
     public void DecisionEngine_Greeting_ShouldConverseWithoutForcingIoTPath()
     {
-        var ei = new EmotionalIntelligence(Mock.Of<ILogger<EmotionalIntelligence>>());
-        var memory = CreateMemory();
-        var engine = new DecisionEngine(
-            new NeuroSync.IoT.IoTDeviceSimulator(),
-            null,
-            Mock.Of<ILogger<DecisionEngine>>(),
-            memory,
-            ei,
-            null,
-            new SafetyGateService(ei, Mock.Of<ILogger<SafetyGateService>>()),
-            new CompanionModeService(),
-            new EmotionalBaselineService(memory, Mock.Of<ILogger<EmotionalBaselineService>>()));
+        var engine = CompanionTestFactory.CreateEngine(CreateMemory());
 
         var result = new EmotionResult(EmotionType.Neutral, 0.9f, "hi")
         {
@@ -229,6 +218,7 @@ public class CompanionFeatureTests : IDisposable
         response.Action.Should().Be("converse");
         response.Message.Should().NotBeNullOrWhiteSpace();
         response.Parameters.Should().ContainKey("disclaimer");
+        response.Message.ToLowerInvariant().Should().NotContain("i sense you're feeling");
         DecisionEngine.ShouldTriggerIoT("hi").Should().BeFalse();
     }
 

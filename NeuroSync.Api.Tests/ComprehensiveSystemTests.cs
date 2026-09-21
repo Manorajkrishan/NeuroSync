@@ -39,13 +39,7 @@ public class ComprehensiveSystemTests
         var scopeFactory = new Mock<IServiceScopeFactory>();
         scopeFactory.Setup(f => f.CreateScope()).Throws(new InvalidOperationException("no db in tests"));
         var conversationMemory = new ConversationMemory(conversationLogger, scopeFactory.Object);
-        _decisionEngine = new DecisionEngine(
-            _iotSimulator,
-            null,
-            decisionLogger,
-            conversationMemory,
-            _emotionalIntelligence
-        );
+        _decisionEngine = CompanionTestFactory.CreateEngine(conversationMemory);
 
         _systemTestCases = GenerateSystemTestCases();
     }

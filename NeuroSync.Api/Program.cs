@@ -228,7 +228,11 @@ builder.Services.AddSingleton<FacialWellbeingService>();
 builder.Services.AddSingleton<SafetyGateService>();
 builder.Services.AddSingleton<CompanionModeService>();
 builder.Services.AddSingleton<EmotionalBaselineService>();
+builder.Services.AddSingleton<IntentRouterService>();
+builder.Services.AddSingleton<ResponsePolicyService>();
+builder.Services.AddSingleton<ICompanionResponseService, CompanionResponseService>();
 builder.Services.AddSingleton<ICompanionProvider, TemplateCompanionProvider>();
+builder.Services.AddSingleton<IEmotionAiClient, MlNetEmotionAiClient>();
 
 // Add Person Memory
 builder.Services.AddSingleton<PersonMemory>();
@@ -239,7 +243,7 @@ builder.Services.AddScoped<ActionExecutor>();
 // Add Real-World Data Collector for continuous learning
 builder.Services.AddSingleton<RealWorldDataCollector>();
 
-// Add Decision Engine (safety → modes → companion provider)
+// Companion DecisionEngine: Safety → Intent → Emotion(sensor) → Mode → Policy → Response
 builder.Services.AddScoped<DecisionEngine>(sp =>
 {
     var iotSimulator = sp.GetRequiredService<IoTDeviceSimulator>();
@@ -248,12 +252,19 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var conversationMemory = sp.GetService<ConversationMemory>();
     var emotionalIntelligence = sp.GetService<EmotionalIntelligence>();
     var companion = sp.GetService<BestFriendCompanionService>();
-    var safetyGate = sp.GetService<SafetyGateService>();
-    var modes = sp.GetService<CompanionModeService>();
+    var safetyGate = sp.GetRequiredService<SafetyGateService>();
+    var intents = sp.GetRequiredService<IntentRouterService>();
+    var modes = sp.GetRequiredService<CompanionModeService>();
+    var policy = sp.GetRequiredService<ResponsePolicyService>();
+    var responder = sp.GetRequiredService<ICompanionResponseService>();
     var baseline = sp.GetService<EmotionalBaselineService>();
-    var provider = sp.GetRequiredService<ICompanionProvider>();
+    var provider = sp.GetService<ICompanionProvider>();
     var consent = sp.GetService<EthicalAIFrameworkService>();
-    return new DecisionEngine(iotSimulator, realIoTController, logger, conversationMemory, emotionalIntelligence, companion, safetyGate, modes, baseline, provider, consent);
+    return new DecisionEngine(
+        iotSimulator, realIoTController, logger,
+        safetyGate, intents, modes, policy, responder,
+        conversationMemory, companion, baseline, consent,
+        emotionalIntelligence, provider);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>

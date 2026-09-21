@@ -383,36 +383,44 @@ function sendMessage() {
     // Hide quick emotions
     document.getElementById('quickEmotions')?.style.setProperty('display', 'none');
 
-    // Send to backend
-    // Use global detectEmotion from app.js - it handles both API response and SignalR events
-    // This prevents duplicate messages
-    if (typeof window.detectEmotion === 'function') {
-        window.detectEmotion(text);
-    } else if (typeof detectEmotion === 'function') {
-        detectEmotion(text);
-    } else {
-        // Fallback: direct API call (should not be reached if app.js loads correctly)
-        console.warn('detectEmotion not available, using fallback API call');
-        const apiBaseUrl = window.API_BASE_URL || API_BASE_URL || window.location.origin;
-        fetch(`${apiBaseUrl}/api/emotion/detect`, {
-            method: 'POST',
-            headers: (typeof window.neurosyncHeaders === 'function')
-                ? window.neurosyncHeaders()
-                : { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, userId: currentUserId })
-        })
-        .then(res => res.json())
-        .then(data => {
-            // Only display if not already displayed by SignalR
-            if (data.emotion) {
-                displayEmotionResult(data.emotion);
+    // V1: prefer thin companion endpoint (natural message only in chat)
+    sendCompanionMessage(text);
+}
+
+function sendCompanionMessage(text) {
+    const apiBaseUrl = window.API_BASE_URL || (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '') || window.location.origin;
+    fetch(`${apiBaseUrl}/api/companion/message`, {
+        method: 'POST',
+        headers: (typeof window.neurosyncHeaders === 'function')
+            ? window.neurosyncHeaders()
+            : { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, userId: currentUserId })
+    })
+    .then(res => res.json().then(data => ({ ok: res.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok) {
+            addChatMessage(data.error || 'Something went wrong.', 'ai');
+            return;
+        }
+        // Chat: ONLY natural companion text
+        displayAdaptiveResponse({
+            message: data.message,
+            parameters: {
+                interactionMode: data.mode,
+                uncertainty: data.uncertainty,
+                actionOffer: data.actionOffer,
+                developerInsights: data.developerInsights,
+                iotBlocked: data.iotBlocked
             }
-            if (data.adaptiveResponse) {
-                displayAdaptiveResponse(data.adaptiveResponse);
-            }
-        })
-        .catch(err => console.error('Error:', err));
-    }
+        });
+    })
+    .catch(err => {
+        console.error('Companion message error:', err);
+        // Legacy fallback
+        if (typeof window.detectEmotion === 'function') {
+            window.detectEmotion(text);
+        }
+    });
 }
 
 function quickEmotion(emotion) {
@@ -430,9 +438,9 @@ function quickEmotion(emotion) {
     }
 }
 
-// Helper function for direct API calls
+// Helper — legacy detect still maps emotion → developer panel only
 function sendEmotionDetectionRequest(text, userId, apiBaseUrl) {
-    fetch(`${apiBaseUrl}/api/emotion/detect`, {
+    fetch(`${apiBaseUrl}/api/companion/message`, {
         method: 'POST',
         headers: (typeof window.neurosyncHeaders === 'function')
             ? window.neurosyncHeaders()
@@ -441,14 +449,16 @@ function sendEmotionDetectionRequest(text, userId, apiBaseUrl) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.emotion) {
-            displayEmotionResult(data.emotion);
-        }
-        if (data.adaptiveResponse) {
-            displayAdaptiveResponse(data.adaptiveResponse);
-        }
-        if (data.response) {
-            displayAdaptiveResponse(data.response);
+        if (data.message) {
+            displayAdaptiveResponse({
+                message: data.message,
+                parameters: {
+                    interactionMode: data.mode,
+                    uncertainty: data.uncertainty,
+                    actionOffer: data.actionOffer,
+                    developerInsights: data.developerInsights
+                }
+            });
         }
     })
     .catch(err => console.error('Error:', err));
@@ -579,13 +589,23 @@ function displayEmotionResult(result) {
     const emotion = getEmotionString(result.emotion);
     updateCompanionAvatar(emotion);
     
-    // Update body background based on emotion
+    // Update body background based on emotion (subtle ambience only)
     document.body.className = `emotion-${emotion}`;
 
-    // Add AI response message
-    if (result.confidence) {
-        const message = `I sense you're feeling ${emotion} (${Math.round(result.confidence * 100)}% confidence).`;
-        addChatMessage(message, 'ai');
+    // NEVER dump "I sense you're feeling X (98%)" into chat.
+    // Emotion is an internal sensor — companion reply comes from adaptiveResponse only.
+    // Optional developer insights live in window.__neurosyncInsights.
+    if (result && typeof window !== 'undefined') {
+        window.__neurosyncInsights = Object.assign({}, window.__neurosyncInsights || {}, {
+            primarySignal: emotion,
+            modelScore: result.confidence,
+            uncertainty: result.uncertainty,
+            updatedAt: new Date().toISOString()
+        });
+        const insightsEl = document.getElementById('devInsights');
+        if (insightsEl) {
+            insightsEl.textContent = `Signal ${emotion} · score ${(result.confidence * 100).toFixed(0)}% · ${result.uncertainty || 'n/a'}`;
+        }
     }
 }
 
@@ -593,7 +613,7 @@ function displayEmotionResult(result) {
 let _recentMessages = new Set();
 let _messageTimestamps = new Map();
 
-function displayAdaptiveResponse(response) {
+function displayAdaptiveResponse(response, opts) {
     if (!response || !response.message) return;
 
     // Deduplication: Don't display the same message within 3 seconds
@@ -621,17 +641,23 @@ function displayAdaptiveResponse(response) {
     _recentMessages.add(messageKey);
     _messageTimestamps.set(messageKey, now);
 
-    // Add AI response to chat (with optional "Wrong? Correct" for text-based flow)
+    // Chat shows ONLY natural companion text — never emotion % claims
     addChatMessage(response.message, 'ai', opts && (opts.showCorrect === true) ? { showCorrect: true, userText: opts.userText || window._lastEmotionUserText } : undefined);
 
     // Developer insights only — never the chat bubble
     if (response.parameters && response.parameters.developerInsights) {
-        window.__neurosyncInsights = response.parameters.developerInsights;
+        const d = response.parameters.developerInsights;
+        window.__neurosyncInsights = d;
         const insightsEl = document.getElementById('devInsights');
         if (insightsEl) {
-            const d = response.parameters.developerInsights;
             insightsEl.textContent = `Intent ${d.intent || '—'} · Mode ${d.mode || '—'} · Safety ${d.safety || '—'} · Signal ${d.primarySignal || '—'} · score ${d.modelScore != null ? Math.round(d.modelScore * 100) : '—'}%`;
         }
+        const modeChip = document.getElementById('modeChip');
+        const uncChip = document.getElementById('uncChip');
+        const safeChip = document.getElementById('safeChip');
+        if (modeChip) modeChip.textContent = d.mode || response.parameters.interactionMode || '—';
+        if (uncChip) uncChip.textContent = d.uncertainty || response.parameters.uncertainty || '—';
+        if (safeChip) safeChip.textContent = d.safety || response.parameters.safetyLevel || 'Normal';
     }
 
     // Update avatar if emotion changed
@@ -650,17 +676,8 @@ function displayAdaptiveResponse(response) {
 
 function displayMultiLayerResult(result) {
     if (!result) return;
-
-    // Do not dump multi-layer confidence into the companion chat bubble
-    window.__neurosyncInsights = Object.assign({}, window.__neurosyncInsights || {}, {
-        multilayer: result.primaryEmotion,
-        overallConfidence: result.overallConfidence
-    });
-    if (result.primaryEmotion) {
-        updateCompanionAvatar(String(result.primaryEmotion).toLowerCase());
-    }
-}    addChatMessage(message, 'ai');
-    updateCompanionAvatar(result.primaryEmotion?.toLowerCase() || 'neutral');
+    window.__neurosyncInsights = Object.assign({}, window.__neurosyncInsights || {}, { multilayer: result.primaryEmotion, overallConfidence: result.overallConfidence });
+    if (result.primaryEmotion) updateCompanionAvatar(String(result.primaryEmotion).toLowerCase());
 }
 
 // Avatar management

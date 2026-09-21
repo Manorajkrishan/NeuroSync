@@ -32,13 +32,20 @@ public class PrivacyController : ControllerBase
     }
 
     [HttpGet("consent/{userId}")]
-    public IActionResult GetConsent(string userId) => Ok(_consent.GetOrCreateDefault(userId));
+    public IActionResult GetConsent(string userId)
+    {
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+        return Ok(_consent.GetOrCreateDefault(safe));
+    }
 
     [HttpPut("consent/{userId}")]
     public IActionResult SetConsent(string userId, [FromBody] EthicalAIConsent body)
     {
-        _consent.SetConsent(userId, body);
-        return Ok(_consent.GetOrCreateDefault(userId));
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+        _consent.SetConsent(safe, body);
+        return Ok(_consent.GetOrCreateDefault(safe));
     }
 
     [HttpGet("memory/{userId}")]

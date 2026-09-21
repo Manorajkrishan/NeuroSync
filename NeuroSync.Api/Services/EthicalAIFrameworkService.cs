@@ -205,7 +205,13 @@ public class EthicalAIFrameworkService
     {
         try
         {
-            var filePath = Path.Combine(_storagePath, $"{userId}.json");
+            if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            {
+                _logger.LogWarning("Refusing to save consent for unsafe userId");
+                return;
+            }
+
+            var filePath = Path.Combine(_storagePath, $"{safe}.json");
             var json = System.Text.Json.JsonSerializer.Serialize(consent, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }

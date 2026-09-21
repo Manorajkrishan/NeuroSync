@@ -32,17 +32,7 @@ public class EvaluationSuiteTests
             understanding);
         _safety = new SafetyGateService(Mock.Of<ILogger<SafetyGateService>>());
         _modes = new CompanionModeService();
-
-        var scopeFactory = new Mock<IServiceScopeFactory>();
-        scopeFactory.Setup(f => f.CreateScope()).Throws(new InvalidOperationException("no db"));
-        var memory = new ConversationMemory(Mock.Of<ILogger<ConversationMemory>>(), scopeFactory.Object);
-        var ei = new EmotionalIntelligence(Mock.Of<ILogger<EmotionalIntelligence>>());
-        _engine = new DecisionEngine(
-            new IoTDeviceSimulator(), null, Mock.Of<ILogger<DecisionEngine>>(),
-            memory, ei, null, _safety, _modes,
-            new EmotionalBaselineService(memory, Mock.Of<ILogger<EmotionalBaselineService>>()),
-            new TemplateCompanionProvider(),
-            null);
+        _engine = CompanionTestFactory.CreateEngine();
     }
 
     [Fact]

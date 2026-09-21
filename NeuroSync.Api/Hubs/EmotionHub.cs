@@ -4,24 +4,32 @@ using NeuroSync.Core;
 namespace NeuroSync.Api.Hubs;
 
 /// <summary>
-/// SignalR hub for real-time emotion data transmission.
+/// SignalR hub for real-time companion updates — scoped per user group, never broadcast.
 /// </summary>
 public class EmotionHub : Hub
 {
-    public async Task SendEmotionResult(EmotionResult result)
+    /// <summary>
+    /// Client must call this after connect so EmotionDetected / AdaptiveResponse / IoTAction
+    /// only reach that user's connections.
+    /// </summary>
+    public async Task JoinUserGroup(string userId)
     {
-        await Clients.All.SendAsync("EmotionDetected", result);
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            throw new HubException("Invalid userId");
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, EmotionHubUserScope.GroupName(safe));
+        await Clients.Caller.SendAsync("JoinedUserGroup", EmotionHubUserScope.GroupName(safe));
     }
 
-    public async Task SendAdaptiveResponse(AdaptiveResponse response)
+    public async Task LeaveUserGroup(string userId)
     {
-        await Clients.All.SendAsync("AdaptiveResponse", response);
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return;
+
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, EmotionHubUserScope.GroupName(safe));
     }
 
-    public async Task SendIoTAction(IoTAction action)
-    {
-        await Clients.All.SendAsync("IoTAction", action);
-    }
+    // Deprecated client-callable broadcast APIs removed — use server-side EmotionHubUserScope.
 
     public override async Task OnConnectedAsync()
     {
@@ -34,5 +42,3 @@ public class EmotionHub : Hub
         await base.OnDisconnectedAsync(exception);
     }
 }
-
-

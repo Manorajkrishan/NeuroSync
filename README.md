@@ -10,7 +10,10 @@ NeuroSync understands emotional *signals* from conversation, responds like a car
 
 Positioning: **emotion-aware wellbeing companion / affective computing** — not a mental-health diagnostic product.
 
-**Deploy / auth / secrets:** see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+**Deploy / auth / secrets:** see **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**  
+**HF research stage (ML.NET baseline kept):** see **[research/experiment-plan.md](research/experiment-plan.md)** and `ai-service/`
+
+Companion chat no longer says “I sense you’re feeling X (98%)”. Emotion is an internal sensor; intents drive natural replies.
 
 ## What works today (V1 → early V2)
 

@@ -122,6 +122,11 @@ function initializeSignalR() {
         connection.onreconnected((connectionId) => {
             console.log("✅ SignalR reconnected:", connectionId);
             updateConnectionStatus(true, 'Connected');
+            const uid = (typeof localStorage !== 'undefined' && localStorage.getItem('neuroSync_userId'))
+                || sessionStorage.getItem('neuroSync_userId')
+                || localStorage.getItem('ns_uid')
+                || 'default';
+            connection.invoke('JoinUserGroup', uid).catch(() => {});
         });
 
         connection.onclose((error) => {
@@ -144,6 +149,15 @@ function initializeSignalR() {
             .then(() => {
                 console.log("✅ SignalR connection started successfully");
                 updateConnectionStatus(true, 'Connected');
+
+                // Join per-user group so EmotionDetected / AdaptiveResponse are never broadcast to Clients.All
+                const uid = (typeof localStorage !== 'undefined' && localStorage.getItem('neuroSync_userId'))
+                    || sessionStorage.getItem('neuroSync_userId')
+                    || localStorage.getItem('ns_uid')
+                    || 'default';
+                connection.invoke('JoinUserGroup', uid)
+                    .then(() => console.log('Joined SignalR user group for', uid))
+                    .catch(err => console.warn('JoinUserGroup failed:', err));
                 
                 // Notify companion-ui.js that connection is ready
                 if (typeof window.setupSignalRHandlers === 'function') {
@@ -254,7 +268,10 @@ async function detectEmotion(textParam = null) {
 
         window._lastEmotionUserText = text || null;
 
-        const response = await fetch(`${API_BASE_URL}/api/emotion/detect`, {
+        // Prefer companion surface when chat UI is present; emotion/detect remains for legacy/debug
+        const useCompanion = !!document.getElementById('chatMessages') || !!document.getElementById('chat');
+        const endpoint = useCompanion ? '/api/companion/message' : '/api/emotion/detect';
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             headers: (typeof window.neurosyncHeaders === 'function')
                 ? window.neurosyncHeaders()
@@ -290,6 +307,20 @@ async function detectEmotion(textParam = null) {
         const data = await response.json();
         console.log('Emotion detection result:', data);
 
+        // Companion endpoint shape → adaptiveResponse for display helpers
+        if (data.message && !data.adaptiveResponse) {
+            data.adaptiveResponse = {
+                message: data.message,
+                parameters: {
+                    interactionMode: data.mode,
+                    uncertainty: data.uncertainty,
+                    actionOffer: data.actionOffer,
+                    developerInsights: data.developerInsights,
+                    iotBlocked: data.iotBlocked
+                }
+            };
+        }
+
         // Handle action results (like voice note playback, person memory, etc.)
         if (data.actionResult) {
             displayActionResult(data.actionResult);
@@ -298,13 +329,13 @@ async function detectEmotion(textParam = null) {
             // Display results
             // NOTE: SignalR will also send these events, so we only display from API response
             // if SignalR hasn't already displayed them (deduplication is handled in display functions)
+            // NEVER dump emotion label/% into chat — only developer panel / legacy card
             if (data.emotion) {
                 try {
-                    // Only display if displayEmotionResult function exists (from companion-ui.js)
                     if (typeof displayEmotionResult === 'function') {
                         displayEmotionResult(data.emotion);
                     } else {
-                        // Fallback for old UI
+                        // Fallback for old UI cards only (not chat)
                         const emotionType = document.getElementById('emotionType');
                         const emotionConfidence = document.getElementById('emotionConfidence');
                         const resultCard = document.getElementById('emotionResult');
@@ -325,9 +356,8 @@ async function detectEmotion(textParam = null) {
             }
             if (data.adaptiveResponse) {
                 try {
-                    // Only display if displayAdaptiveResponse function exists (from companion-ui.js)
                     if (typeof displayAdaptiveResponse === 'function') {
-                        displayAdaptiveResponse(data.adaptiveResponse, { showCorrect: true, userText: text });
+                        displayAdaptiveResponse(data.adaptiveResponse, { showCorrect: !useCompanion, userText: text });
                     }
                 } catch (error) {
                     console.error('Error displaying adaptive response:', error);
@@ -400,16 +430,31 @@ function getEmotionName(emotion) {
 }
 
 function displayEmotionResult(result) {
+    // Legacy card UI only — NEVER add emotion%/confidence bubbles to chat
     const resultCard = document.getElementById('emotionResult');
     const emotionType = document.getElementById('emotionType');
     const emotionConfidence = document.getElementById('emotionConfidence');
 
-    // Handle emotion enum (can be number or string)
+    if (!resultCard || !emotionType || !emotionConfidence) {
+        // Companion UI: route to developer insights panel if present
+        if (typeof window !== 'undefined' && result) {
+            window.__neurosyncInsights = Object.assign({}, window.__neurosyncInsights || {}, {
+                primarySignal: getEmotionName(result.emotion),
+                modelScore: result.confidence,
+                uncertainty: result.uncertainty
+            });
+            const insightsEl = document.getElementById('devInsights');
+            if (insightsEl) {
+                insightsEl.textContent = `Signal ${getEmotionName(result.emotion)} · score ${((result.confidence || 0) * 100).toFixed(0)}%`;
+            }
+        }
+        return;
+    }
+
     const emotionValue = result.emotion;
     const emotionName = getEmotionName(emotionValue);
     emotionType.textContent = emotionName;
     
-    // Ensure emotionName is a string before calling toLowerCase
     const emotionNameString = String(emotionName);
     emotionType.className = `emotion-badge ${emotionNameString.toLowerCase()}`;
     

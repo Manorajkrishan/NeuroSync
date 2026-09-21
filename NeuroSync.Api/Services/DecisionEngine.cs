@@ -4,8 +4,9 @@ using NeuroSync.IoT;
 namespace NeuroSync.Api.Services;
 
 /// <summary>
-/// V1 DecisionEngine: Safety → Uncertainty → Mode → CompanionProvider → optional action ask.
-/// Emits DecisionTrace for debugging. Does not diagnose.
+/// Companion DecisionEngine:
+/// Safety → Intent → Emotion(sensor) → Baseline → Mode → Policy → Natural response.
+/// Never exposes emotion labels/confidence as the chat message.
 /// </summary>
 public class DecisionEngine
 {
@@ -13,43 +14,51 @@ public class DecisionEngine
     private readonly RealIoTController? _realIoTController;
     private readonly ILogger<DecisionEngine> _logger;
     private readonly ConversationMemory? _conversationMemory;
-    private readonly EmotionalIntelligence? _emotionalIntelligence;
     private readonly BestFriendCompanionService? _companion;
-    private readonly SafetyGateService? _safetyGate;
-    private readonly CompanionModeService? _modes;
+    private readonly SafetyGateService _safetyGate;
+    private readonly IntentRouterService _intents;
+    private readonly CompanionModeService _modes;
     private readonly EmotionalBaselineService? _baseline;
-    private readonly ICompanionProvider _companionProvider;
+    private readonly ResponsePolicyService _policy;
+    private readonly ICompanionResponseService _responder;
     private readonly EthicalAIFrameworkService? _consent;
 
     public DecisionEngine(
         IoTDeviceSimulator iotSimulator,
         RealIoTController? realIoTController,
         ILogger<DecisionEngine> logger,
+        SafetyGateService safetyGate,
+        IntentRouterService intents,
+        CompanionModeService modes,
+        ResponsePolicyService policy,
+        ICompanionResponseService responder,
         ConversationMemory? conversationMemory = null,
-        EmotionalIntelligence? emotionalIntelligence = null,
         BestFriendCompanionService? companion = null,
-        SafetyGateService? safetyGate = null,
-        CompanionModeService? modes = null,
         EmotionalBaselineService? baseline = null,
-        ICompanionProvider? companionProvider = null,
-        EthicalAIFrameworkService? consent = null)
+        EthicalAIFrameworkService? consent = null,
+        EmotionalIntelligence? emotionalIntelligence = null,
+        ICompanionProvider? companionProvider = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
         _logger = logger;
-        _conversationMemory = conversationMemory;
-        _emotionalIntelligence = emotionalIntelligence;
-        _companion = companion;
         _safetyGate = safetyGate;
+        _intents = intents;
         _modes = modes;
+        _policy = policy;
+        _responder = responder;
+        _conversationMemory = conversationMemory;
+        _companion = companion;
         _baseline = baseline;
-        _companionProvider = companionProvider ?? new TemplateCompanionProvider();
         _consent = consent;
+        _ = emotionalIntelligence;
+        _ = companionProvider;
     }
 
     public AdaptiveResponse GenerateResponse(EmotionResult emotionResult, string? userId = "default", string? userMessage = null)
     {
         userId ??= "default";
+        userMessage ??= emotionResult.OriginalText ?? "";
 
         var memoryAllowed = _consent == null || _consent.HasConsent(userId, ConsentType.Memory)
                             || _consent.HasConsent(userId, ConsentType.DataStorage);
@@ -61,75 +70,77 @@ public class DecisionEngine
         if (_conversationMemory != null && (memoryAllowed || emotionHistoryAllowed))
             context = _conversationMemory.GetOrCreateContext(userId);
 
-        var safety = _safetyGate?.Assess(userMessage, context) ?? new SafetyAssessment();
-        var mode = _modes?.Resolve(userMessage, emotionResult.Emotion, safety.Level)
-                   ?? CompanionInteractionMode.Talk;
+        var safety = _safetyGate.Assess(userMessage, context);
+
+        var intent = _intents.Detect(userMessage, context, safety.Level);
+        if (safety.BlockNormalCompanionFlow)
+            intent = UserIntent.SafetySensitive;
+
+        if (intent is UserIntent.Greeting or UserIntent.CasualConversation
+            || userMessage.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 2)
+        {
+            if (intent is UserIntent.Greeting or UserIntent.CasualConversation)
+            {
+                emotionResult.Uncertainty = UncertaintyLevel.InsufficientEvidence;
+                emotionResult.UncertaintyNote = "Short/social message — insufficient emotional evidence.";
+            }
+        }
 
         CompanionTurn? turn = null;
-        if (_companion != null && !string.IsNullOrWhiteSpace(userMessage) && memoryAllowed)
+        if (_companion != null && !string.IsNullOrWhiteSpace(userMessage) && memoryAllowed
+            && intent is UserIntent.EmotionalDisclosure or UserIntent.ListeningRequest or UserIntent.AdviceRequest)
         {
             turn = _companion.BuildTurn(userId, userMessage, emotionResult);
-            if (safety.BlockNormalCompanionFlow)
-                turn.IsCrisis = true;
+            if (safety.BlockNormalCompanionFlow) turn.IsCrisis = true;
         }
 
-        // Prefer provider (template/LLM) for core message — keeps DecisionEngine model-agnostic
-        var message = _companionProvider.Generate(
-            emotionResult, mode, safety, emotionResult.Uncertainty, userMessage, turn?.DisplayName);
+        var mode = intent switch
+        {
+            UserIntent.ListeningRequest => CompanionInteractionMode.Listen,
+            UserIntent.AdviceRequest => CompanionInteractionMode.ProblemSolving,
+            UserIntent.Greeting or UserIntent.CasualConversation => CompanionInteractionMode.Talk,
+            UserIntent.EnvironmentAction => CompanionInteractionMode.Focus,
+            UserIntent.SafetySensitive => CompanionInteractionMode.Listen,
+            _ => _modes.Resolve(userMessage, emotionResult.Emotion, safety.Level)
+        };
+        if (intent == UserIntent.EmotionalDisclosure && mode == CompanionInteractionMode.Talk)
+            mode = CompanionInteractionMode.Listen;
 
-        // Soft-merge empathetic templates when high confidence and not crisis
-        if (!safety.BlockNormalCompanionFlow
-            && emotionResult.Uncertainty == UncertaintyLevel.HighConfidence
-            && _emotionalIntelligence != null
-            && !EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage))
-        {
-            var rich = _emotionalIntelligence.GenerateEmpatheticMessage(emotionResult.Emotion, context, userMessage);
-            if (!string.IsNullOrWhiteSpace(rich) && rich.Length > 20)
-                message = _modes != null
-                    ? _modes.ShapeMessage(rich, mode, turn?.DisplayName)
-                    : rich;
-            message = _emotionalIntelligence.PersonalizeMessage(message, turn?.Profile, turn);
-        }
-        else if (EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage) && _emotionalIntelligence != null)
-        {
-            message = _emotionalIntelligence.GenerateEmpatheticMessage(emotionResult.Emotion, context, userMessage);
-            if (!string.IsNullOrEmpty(turn?.DisplayName))
-                message = $"{turn.DisplayName} — {message}";
-        }
+        var baseline = emotionHistoryAllowed ? _baseline?.GetSnapshot(userId) : null;
+        if (baseline is { HasSufficientData: false })
+            baseline.IsSignificantlyDifferent = false;
 
-        string? followUpQuestion = null;
-        if (!safety.BlockNormalCompanionFlow && emotionResult.Uncertainty == UncertaintyLevel.HighConfidence)
+        var turnCtx = new CompanionTurnContext
         {
-            if (_modes != null && emotionResult.Emotion is EmotionType.Sad or EmotionType.Anxious or EmotionType.Frustrated)
-                followUpQuestion = _modes.ModeChoicePrompt(mode);
-            else if (_emotionalIntelligence != null)
-                followUpQuestion = _emotionalIntelligence.GenerateFollowUpQuestion(
-                    emotionResult.Emotion, userMessage ?? emotionResult.OriginalText, context);
-        }
-        else if (!safety.BlockNormalCompanionFlow && emotionResult.Uncertainty != UncertaintyLevel.HighConfidence)
-        {
-            followUpQuestion = "Want to tell me a bit more, or leave it for now?";
-        }
+            UserMessage = userMessage,
+            DisplayName = turn?.DisplayName,
+            Intent = intent,
+            Mode = mode,
+            Emotion = emotionResult,
+            Safety = safety,
+            Uncertainty = emotionResult.Uncertainty,
+            Conversation = context,
+            Baseline = baseline
+        };
+
+        var policy = _policy.Evaluate(turnCtx);
+        var reply = _responder.Generate(turnCtx, policy);
 
         var offerQuiet = !safety.BlockNormalCompanionFlow
                          && mode is CompanionInteractionMode.Calm or CompanionInteractionMode.Focus
-                         && emotionResult.Emotion is EmotionType.Anxious or EmotionType.Sad or EmotionType.Frustrated;
+                         && intent is UserIntent.EmotionalDisclosure or UserIntent.TaskRequest;
 
         var action = safety.BlockNormalCompanionFlow
             ? "crisis_support"
-            : mode switch
+            : intent switch
             {
-                CompanionInteractionMode.Listen => "supportive_listen",
-                CompanionInteractionMode.ProblemSolving => "problem_friend",
-                CompanionInteractionMode.Focus => "focus_mode",
-                CompanionInteractionMode.Calm => "calm_companion",
-                CompanionInteractionMode.Companion => "companion_chat",
-                _ => EmotionalIntelligence.IsGreetingOrSmallTalk(userMessage) ? "converse" : "converse"
+                UserIntent.Greeting or UserIntent.CasualConversation => "converse",
+                UserIntent.EnvironmentAction => "environment_ask",
+                UserIntent.ListeningRequest => "supportive_listen",
+                UserIntent.AdviceRequest => "problem_friend",
+                UserIntent.EmotionalDisclosure => mode == CompanionInteractionMode.Listen ? "supportive_listen" : "converse",
+                _ => "converse"
             };
-
-        var baseline = emotionHistoryAllowed ? _baseline?.GetSnapshot(userId) : null;
-        if (baseline != null && !baseline.HasSufficientData)
-            baseline.IsSignificantlyDifferent = false;
 
         var trace = new DecisionTrace
         {
@@ -142,85 +153,57 @@ public class DecisionEngine
             BaselineDeviation = baseline is { HasSufficientData: true } ? baseline.Deviation : null,
             BaselineConfidence = baseline?.BaselineConfidence,
             Action = offerQuiet ? "AskQuietMode" : (ShouldTriggerIoT(userMessage) && iotConsent ? "IoTOnRequest" : "None"),
-            MemoryWriteAllowed = memoryAllowed,
-            Summary = string.Empty
+            MemoryWriteAllowed = memoryAllowed
         };
-        trace.Summary = trace.ToString();
+        trace.Summary = $"Intent={intent} → " + trace.ToString();
 
         var response = new AdaptiveResponse
         {
             Emotion = emotionResult.Emotion,
             Action = action,
-            Message = message,
+            Message = reply.Message,
             Parameters = new Dictionary<string, object>
             {
                 ["disclaimer"] =
-                    "NeuroSync is an emotion-aware wellbeing companion / affective computing system — not a mental-health diagnostic product.",
-                ["safetyLevel"] = safety.Level.ToString(),
+                    "NeuroSync is an emotion-aware wellbeing companion — not a mental-health diagnostic product.",
+                ["intent"] = intent.ToString(),
                 ["interactionMode"] = mode.ToString(),
+                ["safetyLevel"] = safety.Level.ToString(),
                 ["uncertainty"] = emotionResult.Uncertainty.ToString(),
-                ["companionProvider"] = _companionProvider.ProviderId,
+                ["companionProvider"] = reply.ProviderId,
                 ["decisionTrace"] = trace.Summary,
-                ["memoryWriteAllowed"] = memoryAllowed
+                ["memoryWriteAllowed"] = memoryAllowed,
+                ["exposedEmotionToUser"] = false,
+                ["developerInsights"] = new
+                {
+                    intent = intent.ToString(),
+                    mode = mode.ToString(),
+                    safety = safety.Level.ToString(),
+                    primarySignal = emotionResult.Emotion.ToString(),
+                    modelScore = emotionResult.Confidence,
+                    signals = emotionResult.SignalEstimates,
+                    uncertainty = emotionResult.Uncertainty.ToString(),
+                    baselineConfidence = baseline?.BaselineConfidence,
+                    baselineDeviation = baseline?.Deviation,
+                    policyBlocked = policy.ViolationsBlocked
+                }
             }
         };
 
-        if (!string.IsNullOrEmpty(emotionResult.UncertaintyNote))
-            response.Parameters["uncertaintyNote"] = emotionResult.UncertaintyNote;
-        if (safety.Level != SafetyLevel.Normal)
-        {
-            response.Parameters["safetyReason"] = safety.Reason;
-            response.Parameters["safetyGuidance"] = safety.Guidance;
-            if (!string.IsNullOrEmpty(safety.CrisisResourceHint))
-                response.Parameters["crisisResources"] = safety.CrisisResourceHint;
-        }
         if (offerQuiet)
             response.Parameters["actionOffer"] = "Would you like me to enable Quiet Mode?";
         if (ShouldTriggerIoT(userMessage) && !iotConsent)
-            response.Parameters["iotBlocked"] = "IoTConsent is off — enable it in privacy settings to allow environment actions.";
-
-        response.Parameters["understoodAs"] = emotionResult.UnderstoodAs ?? "";
-        response.Parameters["intensity"] = emotionResult.Intensity;
-        if (emotionResult.SignalEstimates.Count > 0)
-            response.Parameters["signalEstimates"] = emotionResult.SignalEstimates;
-        if (baseline != null)
-        {
-            response.Parameters["baseline"] = new
-            {
-                baseline.BaselineMoodScore,
-                baseline.RecentMoodScore,
-                baseline.Deviation,
-                baseline.BaselineConfidence,
-                baseline.HasSufficientData,
-                baseline.IsSignificantlyDifferent,
-                baseline.SampleCount,
-                baseline.Summary
-            };
-            if (baseline.IsSignificantlyDifferent && baseline.HasSufficientData && !safety.BlockNormalCompanionFlow)
-                response.Parameters["baselineCheckIn"] =
-                    "You seem a bit different from your usual pattern. Want to talk, or switch off for a while?";
-        }
-        if (!string.IsNullOrEmpty(followUpQuestion))
-            response.Parameters["followUpQuestion"] = followUpQuestion;
-        if (turn != null)
-        {
-            response.Parameters["companionMode"] = "best_friend";
-            if (!string.IsNullOrEmpty(turn.DisplayName))
-                response.Parameters["ownerName"] = turn.DisplayName;
-        }
-
+            response.Parameters["iotBlocked"] = "IoTConsent is off — enable it in privacy settings first.";
         if (!memoryAllowed)
-        {
-            response.Parameters["memoryOff"] = true;
             response.Parameters["consentHint"] =
-                "Memory is off — I won't keep long-term history. Enable MemoryConsent in privacy settings if you want me to remember.";
-        }
+                "Memory is off — I won't keep long-term history unless you enable MemoryConsent.";
+        if (!string.IsNullOrEmpty(emotionResult.UncertaintyNote))
+            response.Parameters["uncertaintyNote"] = emotionResult.UncertaintyNote;
 
-        // Internal trace only in logs — not medical UI
-        _logger.LogInformation("DecisionTrace {Trace}", trace.Summary);
+        _logger.LogInformation("Companion turn {Trace}", trace.Summary);
 
         if (_conversationMemory != null && memoryAllowed && !string.IsNullOrEmpty(userMessage))
-            _conversationMemory.AddEntry(userId, userMessage, emotionResult, response, followUpQuestion);
+            _conversationMemory.AddEntry(userId, userMessage, emotionResult, response, null);
 
         return response;
     }
@@ -235,14 +218,8 @@ public class DecisionEngine
         {
             foreach (var action in actions)
             {
-                try
-                {
-                    await _realIoTController.ExecuteActionAsync(action);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "IoT action failed");
-                }
+                try { await _realIoTController.ExecuteActionAsync(action); }
+                catch (Exception ex) { _logger.LogWarning(ex, "IoT action failed"); }
             }
         }
         return actions;

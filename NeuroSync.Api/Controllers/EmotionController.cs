@@ -41,12 +41,11 @@ public class EmotionController : ControllerBase
             return BadRequest(new { error = "Text is required" });
         }
 
+        if (!UserIdSanitizer.TryNormalize(request.UserId, out var userId))
+            return BadRequest(new { error = "Invalid userId (use letters, digits, _ or - only, max 64)" });
+
         try
         {
-            // Get user ID from request or use default
-            var userId = request.UserId ?? "default";
-
-            // Check for action requests first (like "play voice note", "remember person", etc.)
             var actionExecutor = HttpContext.RequestServices.GetService<ActionExecutor>();
             Services.ActionResult? actionResult = null;
             if (actionExecutor != null)
@@ -54,36 +53,28 @@ public class EmotionController : ControllerBase
                 actionResult = await actionExecutor.ExecuteActionAsync(userId, request.Text);
             }
 
-            // Detect emotion
             var emotionResult = _emotionDetectionService.DetectEmotion(request.Text);
-            
-            // Collect real-world data for continuous learning (only high-confidence predictions)
-            if (emotionResult.Confidence >= 0.7f)
-            {
-                var dataCollector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
-                dataCollector?.CollectData(request.Text, emotionResult.Emotion, emotionResult.Confidence);
-            }
 
-            // Generate adaptive response with emotional intelligence
+            // Self-learning: CollectData ONLY with explicit DataSharingConsent (default OFF)
+            TryCollectLearningData(userId, request.Text, emotionResult);
+
             var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, request.Text);
 
-            // IoT only when user asks for lights/music/environment (Jarvis converse-first)
-            var iotActions = DecisionEngine.ShouldTriggerIoT(request.Text)
-                ? await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion)
-                : new List<IoTAction>();
+            // IoT consent enforced here (not only in DecisionEngine trace)
+            var iotActions = await ResolveIoTActionsAsync(userId, request.Text, emotionResult, adaptiveResponse);
 
-            // Send real-time updates via SignalR
-            await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
-            await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
-            
+            // Per-user SignalR — never Clients.All
+            await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "EmotionDetected", emotionResult);
+            await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "AdaptiveResponse", adaptiveResponse);
+
             if (actionResult != null)
             {
-                await _hubContext.Clients.All.SendAsync("ActionExecuted", actionResult);
+                await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "ActionExecuted", actionResult);
             }
-            
+
             foreach (var action in iotActions)
             {
-                await _hubContext.Clients.All.SendAsync("IoTAction", action);
+                await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "IoTAction", action);
             }
 
             return Ok(new
@@ -98,12 +89,11 @@ public class EmotionController : ControllerBase
         {
             _logger.LogError(ex, "Error processing emotion detection: {Message}", ex.Message);
             _logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-            
-            // Return more detailed error in development
-            var errorMessage = _environment.IsDevelopment() 
-                ? $"An error occurred: {ex.Message}" 
+
+            var errorMessage = _environment.IsDevelopment()
+                ? $"An error occurred: {ex.Message}"
                 : "An error occurred while processing the request";
-            
+
             return StatusCode(500, new { error = errorMessage, details = _environment.IsDevelopment() ? ex.ToString() : null });
         }
     }
@@ -141,6 +131,7 @@ public class EmotionController : ControllerBase
         var collector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
         if (collector == null) return StatusCode(500, new { error = "Correction service not available" });
 
+        // Explicit user correction is consent for that sample
         collector.CollectCorrection(request.Text, request.CorrectEmotion);
         return Ok(new { ok = true, message = "Thanks! This helps improve accuracy." });
     }
@@ -164,10 +155,11 @@ public class EmotionController : ControllerBase
             return BadRequest(new { error = "Emotion is required" });
         }
 
+        if (!UserIdSanitizer.TryNormalize(request.UserId, out var userId))
+            return BadRequest(new { error = "Invalid userId (use letters, digits, _ or - only, max 64)" });
+
         try
         {
-            var userId = request.UserId ?? "default";
-
             var ethical = HttpContext.RequestServices.GetService<EthicalAIFrameworkService>();
             if (ethical != null && !ethical.HasConsent(userId, ConsentType.FaceAnalysis))
             {
@@ -178,57 +170,46 @@ public class EmotionController : ControllerBase
                 });
             }
 
-            // Convert string emotion to EmotionType enum
             if (!Enum.TryParse<EmotionType>(request.Emotion, true, out var emotionType))
             {
                 return BadRequest(new { error = $"Invalid emotion type: {request.Emotion}" });
             }
 
-            // Get conversation memory to check context
             var conversationMemory = HttpContext.RequestServices.GetService<ConversationMemory>();
             var context = conversationMemory?.GetOrCreateContext(userId);
-            
-            // Smart response logic: Only respond to significant emotion changes or strong emotions
-            // Don't spam responses for neutral states or minor fluctuations
+
             bool shouldRespond = false;
             string? reason = null;
-            
-            // Check if this is a significant emotion change
+
             if (context != null && context.LastEmotion.HasValue)
             {
                 var lastEmotion = context.LastEmotion.Value;
-                var timeSinceLastResponse = context.LastInteraction.HasValue 
-                    ? (DateTime.UtcNow - context.LastInteraction.Value).TotalSeconds 
+                var timeSinceLastResponse = context.LastInteraction.HasValue
+                    ? (DateTime.UtcNow - context.LastInteraction.Value).TotalSeconds
                     : 999;
-                
-                // Respond if:
-                // 1. Emotion changed significantly (not neutral -> neutral)
+
                 if (lastEmotion != emotionType && emotionType != EmotionType.Neutral)
                 {
                     shouldRespond = true;
                     reason = "emotion_change";
                 }
-                // 2. Strong negative emotion detected (always respond)
-                else if ((emotionType == EmotionType.Sad || emotionType == EmotionType.Anxious || 
+                else if ((emotionType == EmotionType.Sad || emotionType == EmotionType.Anxious ||
                           emotionType == EmotionType.Angry) && request.Confidence > 0.7f)
                 {
                     shouldRespond = true;
                     reason = "strong_negative_emotion";
                 }
-                // 3. Strong positive emotion (happy/excited) with high confidence
-                else if ((emotionType == EmotionType.Happy || emotionType == EmotionType.Excited) && 
+                else if ((emotionType == EmotionType.Happy || emotionType == EmotionType.Excited) &&
                          request.Confidence > 0.8f && timeSinceLastResponse > 10)
                 {
                     shouldRespond = true;
                     reason = "strong_positive_emotion";
                 }
-                // 4. No response in last 30 seconds and user seems engaged (not just neutral)
                 else if (timeSinceLastResponse > 30 && emotionType != EmotionType.Neutral && request.Confidence > 0.75f)
                 {
                     shouldRespond = true;
                     reason = "periodic_check";
                 }
-                // 5. Don't respond to neutral unless it's been a long time (60+ seconds)
                 else if (emotionType == EmotionType.Neutral && timeSinceLastResponse > 60)
                 {
                     shouldRespond = true;
@@ -237,7 +218,6 @@ public class EmotionController : ControllerBase
             }
             else
             {
-                // First interaction - only respond to strong emotions, not neutral
                 if (emotionType != EmotionType.Neutral && request.Confidence > 0.7f)
                 {
                     shouldRespond = true;
@@ -245,7 +225,6 @@ public class EmotionController : ControllerBase
                 }
             }
 
-            // Create emotion result from facial expression + cues
             var emotionResult = new EmotionResult
             {
                 Emotion = emotionType,
@@ -258,7 +237,6 @@ public class EmotionController : ControllerBase
                 LikelyCause = "body language / facial cues"
             };
 
-            // Also react to poor eye contact or restless motion even if emotion is neutral
             if (!shouldRespond && (
                 (request.EyeContactScore.HasValue && request.EyeContactScore < 0.3f) ||
                 (request.FaceMotionScore.HasValue && request.FaceMotionScore > 0.55f) ||
@@ -274,19 +252,18 @@ public class EmotionController : ControllerBase
                 }
             }
 
-            // Only generate and send response if we should respond
             AdaptiveResponse? adaptiveResponse = null;
             List<IoTAction>? iotActions = null;
-            
+
             if (shouldRespond)
             {
-                _logger.LogInformation($"Responding to facial emotion: {emotionType} (confidence: {request.Confidence:P2}, reason: {reason})");
+                _logger.LogInformation("Responding to facial emotion: {Emotion} (confidence: {Confidence:P2}, reason: {Reason})",
+                    emotionType, request.Confidence, reason);
 
                 var facialWellbeing = HttpContext.RequestServices.GetService<FacialWellbeingService>();
                 if (facialWellbeing != null)
                 {
                     adaptiveResponse = facialWellbeing.BuildReaction(userId, request, emotionType);
-                    // Still learn via conversation memory
                     conversationMemory?.AddEntry(userId, emotionResult.OriginalText ?? "facial", emotionResult, adaptiveResponse);
                     var ctx = conversationMemory?.GetOrCreateContext(userId);
                     if (ctx != null)
@@ -303,27 +280,22 @@ public class EmotionController : ControllerBase
 
                 iotActions = new List<IoTAction>();
 
-                await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResult);
-                await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
+                await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "EmotionDetected", emotionResult);
+                await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "AdaptiveResponse", adaptiveResponse);
             }
             else
             {
-                // Still update emotion detection for tracking, but don't send response
-                _logger.LogDebug($"Facial emotion detected but not responding: {emotionType} (confidence: {request.Confidence:P2}) - too soon or neutral");
-                
-                // Update last emotion in context without sending response
+                _logger.LogDebug("Facial emotion detected but not responding: {Emotion} (confidence: {Confidence:P2}) - too soon or neutral",
+                    emotionType, request.Confidence);
+
                 if (context != null)
                 {
                     context.LastEmotion = emotionType;
                 }
             }
 
-            // Collect real-world data for continuous learning (always, even if not responding)
-            if (emotionResult.Confidence >= 0.7f)
-            {
-                var dataCollector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
-                dataCollector?.CollectData($"I'm feeling {request.Emotion}", emotionResult.Emotion, emotionResult.Confidence);
-            }
+            // No auto CollectData for facial without DataSharingConsent
+            TryCollectLearningData(userId, $"I'm feeling {request.Emotion}", emotionResult);
 
             return Ok(new
             {
@@ -337,11 +309,11 @@ public class EmotionController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing facial emotion detection: {Message}", ex.Message);
-            
-            var errorMessage = _environment.IsDevelopment() 
-                ? $"An error occurred: {ex.Message}" 
+
+            var errorMessage = _environment.IsDevelopment()
+                ? $"An error occurred: {ex.Message}"
                 : "An error occurred while processing the request";
-            
+
             return StatusCode(500, new { error = errorMessage, details = _environment.IsDevelopment() ? ex.ToString() : null });
         }
     }
@@ -355,16 +327,15 @@ public class EmotionController : ControllerBase
     {
         try
         {
-            var userId = request.UserId ?? "default";
+            if (!UserIdSanitizer.TryNormalize(request.UserId, out var userId))
+                return BadRequest(new { error = "Invalid userId (use letters, digits, _ or - only, max 64)" });
 
-            // Check ethical consent
             var ethicalFramework = HttpContext.RequestServices.GetService<EthicalAIFrameworkService>();
             if (ethicalFramework != null && !ethicalFramework.HasConsent(userId, ConsentType.EmotionSensing))
             {
                 return BadRequest(new { error = "Emotion sensing consent required. Please provide consent first." });
             }
 
-            // Layer 1: Visual
             VisualEmotionData? visualData = null;
             if (!string.IsNullOrEmpty(request.VisualEmotion) && request.VisualConfidence.HasValue)
             {
@@ -383,7 +354,6 @@ public class EmotionController : ControllerBase
                 }
             }
 
-            // Layer 2: Audio
             AudioEmotionData? audioData = null;
             var audioService = HttpContext.RequestServices.GetService<AdvancedAudioAnalysisService>();
             if (audioService != null && (!string.IsNullOrEmpty(request.AudioTranscript) || request.AudioPitch.HasValue))
@@ -401,7 +371,6 @@ public class EmotionController : ControllerBase
                     speechRate: request.AudioSpeechRate);
             }
 
-            // Layer 3: Biometric
             BiometricEmotionData? biometricData = null;
             var biometricService = HttpContext.RequestServices.GetService<BiometricIntegrationService>();
             if (biometricService != null && (request.HeartRate.HasValue || request.SkinConductivity.HasValue))
@@ -418,7 +387,6 @@ public class EmotionController : ControllerBase
                     temperature: request.Temperature);
             }
 
-            // Layer 4: Contextual
             ContextualEmotionData? contextualData = null;
             var contextualService = HttpContext.RequestServices.GetService<ContextualAwarenessService>();
             if (contextualService != null && (!string.IsNullOrEmpty(request.ActivityType) || request.TaskIntensity.HasValue))
@@ -431,19 +399,16 @@ public class EmotionController : ControllerBase
                     taskComplexity: request.TaskComplexity);
             }
 
-            // If text provided, use existing emotion detection as additional layer
             EmotionResult? textEmotionResult = null;
             if (!string.IsNullOrEmpty(request.Text))
             {
                 textEmotionResult = _emotionDetectionService.DetectEmotion(request.Text);
-                // Add to contextual layer if available
                 if (contextualData == null && contextualService != null)
                 {
                     contextualData = contextualService.AnalyzeContext(userId: userId);
                 }
             }
 
-            // Fuse all layers
             var fusionService = HttpContext.RequestServices.GetService<MultiLayerEmotionFusionService>();
             if (fusionService == null)
             {
@@ -457,7 +422,6 @@ public class EmotionController : ControllerBase
                 contextual: contextualData,
                 userId: userId);
 
-            // Generate adaptive response
             var emotionResultForResponse = textEmotionResult ?? new EmotionResult
             {
                 Emotion = fusedResult.PrimaryEmotion,
@@ -467,28 +431,36 @@ public class EmotionController : ControllerBase
 
             var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResultForResponse, userId, request.Text);
 
-            // IoT only when user explicitly asks for lights/music/environment
             List<IoTAction> iotActions;
             if (DecisionEngine.ShouldTriggerIoT(request.Text))
             {
-                var actionOrchestrator = HttpContext.RequestServices.GetService<AdvancedActionOrchestrator>();
-                iotActions = actionOrchestrator != null
-                    ? await actionOrchestrator.OrchestrateActions(fusedResult, userId)
-                    : await _decisionEngine.GetIoTActionsAsync(fusedResult.PrimaryEmotion);
+                if (ethicalFramework != null && !ethicalFramework.HasConsent(userId, ConsentType.IoT))
+                {
+                    iotActions = new List<IoTAction>();
+                    adaptiveResponse.Parameters["iotBlocked"] = "IoTConsent is off — enable it in privacy settings first.";
+                    adaptiveResponse.Message =
+                        "I can help with that — enable IoT / Quiet Mode in privacy settings first, then ask again.";
+                }
+                else
+                {
+                    var actionOrchestrator = HttpContext.RequestServices.GetService<AdvancedActionOrchestrator>();
+                    iotActions = actionOrchestrator != null
+                        ? await actionOrchestrator.OrchestrateActions(fusedResult, userId)
+                        : await _decisionEngine.GetIoTActionsAsync(fusedResult.PrimaryEmotion);
+                }
             }
             else
             {
                 iotActions = new List<IoTAction>();
             }
 
-            // Send real-time updates via SignalR
-            await _hubContext.Clients.All.SendAsync("EmotionDetected", emotionResultForResponse);
-            await _hubContext.Clients.All.SendAsync("AdaptiveResponse", adaptiveResponse);
-            await _hubContext.Clients.All.SendAsync("MultiLayerEmotion", fusedResult);
-            
+            await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "EmotionDetected", emotionResultForResponse);
+            await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "AdaptiveResponse", adaptiveResponse);
+            await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "MultiLayerEmotion", fusedResult);
+
             foreach (var action in iotActions)
             {
-                await _hubContext.Clients.All.SendAsync("IoTAction", action);
+                await EmotionHubUserScope.SendToUserAsync(_hubContext, userId, "IoTAction", action);
             }
 
             return Ok(new
@@ -502,13 +474,67 @@ public class EmotionController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing multi-layer emotion detection: {Message}", ex.Message);
-            
-            var errorMessage = _environment.IsDevelopment() 
-                ? $"An error occurred: {ex.Message}" 
+
+            var errorMessage = _environment.IsDevelopment()
+                ? $"An error occurred: {ex.Message}"
                 : "An error occurred while processing the request";
-            
+
             return StatusCode(500, new { error = errorMessage, details = _environment.IsDevelopment() ? ex.ToString() : null });
         }
+    }
+
+    /// <summary>
+    /// V1: RealWorldDataCollector.CollectData must NOT run without DataSharingConsent (default OFF).
+    /// </summary>
+    private void TryCollectLearningData(string userId, string text, EmotionResult emotionResult)
+    {
+        if (emotionResult.Confidence < 0.7f)
+            return;
+
+        var ethical = HttpContext.RequestServices.GetService<EthicalAIFrameworkService>();
+        if (ethical == null || !ethical.HasConsent(userId, ConsentType.DataSharing))
+            return; // default OFF — no auto-collect
+
+        var dataCollector = HttpContext.RequestServices.GetService<RealWorldDataCollector>();
+        dataCollector?.CollectData(text, emotionResult.Emotion, emotionResult.Confidence);
+    }
+
+    /// <summary>
+    /// Enforce IoTConsent before GetIoTActionsAsync / execution.
+    /// If user asks for lights but consent OFF → no execute; ask-permission message.
+    /// </summary>
+    private async Task<List<IoTAction>> ResolveIoTActionsAsync(
+        string userId,
+        string text,
+        EmotionResult emotionResult,
+        AdaptiveResponse adaptiveResponse)
+    {
+        if (!DecisionEngine.ShouldTriggerIoT(text))
+            return new List<IoTAction>();
+
+        var ethical = HttpContext.RequestServices.GetService<EthicalAIFrameworkService>();
+        var allowed = ethical != null && ethical.HasConsent(userId, ConsentType.IoT);
+        if (!allowed)
+        {
+            adaptiveResponse.Parameters["iotBlocked"] = "IoTConsent is off — enable it in privacy settings first.";
+            if (!adaptiveResponse.Parameters.ContainsKey("actionOffer"))
+            {
+                adaptiveResponse.Parameters["actionOffer"] =
+                    "I can help with lights/music once you enable IoT consent in privacy settings.";
+            }
+
+            // Prefer a clear ask-permission companion message
+            if (adaptiveResponse.Parameters.TryGetValue("intent", out var intentObj) &&
+                intentObj?.ToString() == nameof(UserIntent.EnvironmentAction))
+            {
+                adaptiveResponse.Message =
+                    "I can help with that — enable IoT / Quiet Mode in privacy settings first, then ask again.";
+            }
+
+            return new List<IoTAction>();
+        }
+
+        return await _decisionEngine.GetIoTActionsAsync(emotionResult.Emotion);
     }
 }
 
@@ -517,4 +543,3 @@ public class EmotionCorrectionRequest
     public string? Text { get; set; }
     public string? CorrectEmotion { get; set; }
 }
-

@@ -91,7 +91,7 @@ public class CompanionConversationTests
                 new IntentRouterService(),
                 new CompanionModeService(),
                 new ResponsePolicyService(),
-                new CompanionResponseService(new ResponsePolicyService()),
+                new CompanionResponseService(new ResponsePolicyService(), new TemplateCompanionProvider()),
                 CompanionTestFactory.CreateMemory(),
                 null,
                 null,
@@ -127,9 +127,9 @@ public class CompanionConversationTests
     public void ResponsePolicy_Sanitize_RemovesConfidenceLeakage()
     {
         var policySvc = new ResponsePolicyService();
-        var ctx = new CompanionTurnContext
+        var ctx = new CompanionContext
         {
-            UserMessage = "hi",
+            CurrentMessage = "hi",
             Intent = UserIntent.Greeting,
             Uncertainty = UncertaintyLevel.InsufficientEvidence
         };

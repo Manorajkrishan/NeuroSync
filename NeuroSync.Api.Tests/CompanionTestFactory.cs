@@ -13,6 +13,8 @@ public static class CompanionTestFactory
         memory ??= CreateMemory();
         var ei = new EmotionalIntelligence(Mock.Of<ILogger<EmotionalIntelligence>>());
         var policy = new ResponsePolicyService();
+        var template = new TemplateCompanionProvider();
+        var responder = new CompanionResponseService(policy, template);
         return new DecisionEngine(
             new IoTDeviceSimulator(),
             null,
@@ -21,13 +23,13 @@ public static class CompanionTestFactory
             new IntentRouterService(),
             new CompanionModeService(),
             policy,
-            new CompanionResponseService(policy),
+            responder,
             memory,
             null,
             new EmotionalBaselineService(memory, Mock.Of<ILogger<EmotionalBaselineService>>()),
             null,
             ei,
-            new TemplateCompanionProvider());
+            template);
     }
 
     public static ConversationMemory CreateMemory()

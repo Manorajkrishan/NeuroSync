@@ -231,7 +231,20 @@ builder.Services.AddSingleton<EmotionalBaselineService>();
 builder.Services.AddSingleton<IntentRouterService>();
 builder.Services.AddSingleton<ResponsePolicyService>();
 builder.Services.AddSingleton<ICompanionResponseService, CompanionResponseService>();
-builder.Services.AddSingleton<ICompanionProvider, TemplateCompanionProvider>();
+builder.Services.AddSingleton<TemplateCompanionProvider>();
+builder.Services.AddSingleton<ICompanionProvider>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var template = sp.GetRequiredService<TemplateCompanionProvider>();
+    if (!config.GetValue("Companion:Llm:Enabled", false))
+        return template;
+
+    return new LlmCompanionProvider(
+        template,
+        sp.GetRequiredService<IHttpClientFactory>(),
+        config,
+        sp.GetRequiredService<ILogger<LlmCompanionProvider>>());
+});
 builder.Services.AddSingleton<IEmotionAiClient, MlNetEmotionAiClient>();
 
 // Add Person Memory

@@ -1,6 +1,14 @@
 # Companion LLM (V2)
 
-`LlmCompanionProvider` implements `ICompanionProvider` with **template fallback**.
+`LlmCompanionProvider` implements async `ICompanionProvider.GenerateAsync(CompanionContext, CancellationToken)` with **template fallback**.
+
+## Interface
+
+```csharp
+Task<CompanionReply> GenerateAsync(CompanionContext context, CancellationToken cancellationToken = default);
+```
+
+`CompanionContext` includes: current message, intent, mode, safety, uncertainty, emotion signals, recent turns, and consent-approved relevant memory.
 
 ## Defaults
 
@@ -15,7 +23,8 @@ When disabled, missing API key, timeout, or HTTP error → `TemplateCompanionPro
 
 ## Enable locally
 
-1. Copy `appsettings.Example.json` → `appsettings.json` (gitignored).
+1. Copy `NeuroSync.Api/appsettings.Example.json` → `appsettings.json` (gitignored).  
+   Do not put `#` comments in JSON — JSON does not allow them.
 2. Set:
 
 ```json
@@ -40,7 +49,9 @@ OpenAI-compatible providers work if `BaseUrl` points at their `/v1` root.
 
 ## Behaviour notes
 
-- Safety gate still blocks normal flow before the LLM runs.
-- LLM receives structured context (mode, safety, uncertainty, emotion summary) — not unrestricted app state.
+- SafetyGate / DecisionEngine remain authoritative **before** companion generation.
+- LLM must not control safety decisions or execute IoT actions.
+- LLM receives structured `CompanionContext` only — not unrestricted app state.
+- HTTP uses `HttpClient.SendAsync` (no sync `.Result` / `.Wait()` / `Send`).
 - Do not show internal emotion scores in the UI.
 - Branch: `feature/llm-companion` — keep V1 `master` frozen at `v1.0.0` until merge.

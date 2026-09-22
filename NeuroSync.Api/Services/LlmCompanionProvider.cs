@@ -9,6 +9,7 @@ namespace NeuroSync.Api.Services;
 
 /// <summary>
 /// OpenAI-compatible LLM companion. Disabled by default; falls back to <see cref="TemplateCompanionProvider"/>.
+/// Does not make safety decisions or execute IoT — SafetyGate / DecisionEngine remain authoritative.
 /// </summary>
 public sealed class LlmCompanionProvider : ICompanionProvider
 {
@@ -34,53 +35,64 @@ public sealed class LlmCompanionProvider : ICompanionProvider
     private bool IsEnabled =>
         _configuration.GetValue("Companion:Llm:Enabled", false);
 
-    public string Generate(
-        EmotionResult emotion,
-        CompanionInteractionMode mode,
-        SafetyAssessment safety,
-        UncertaintyLevel uncertainty,
-        string? userMessage,
-        string? displayName)
+    public async Task<CompanionReply> GenerateAsync(
+        CompanionContext context,
+        CancellationToken cancellationToken = default)
     {
-        if (safety.BlockNormalCompanionFlow)
-            return safety.Guidance;
+        // Safety is decided upstream; never let the LLM override crisis guidance.
+        if (context.Safety.BlockNormalCompanionFlow)
+        {
+            return new CompanionReply
+            {
+                Message = context.Safety.Guidance,
+                ProviderId = "safety-protocol",
+                ExposedEmotionToUser = false
+            };
+        }
 
         if (!IsEnabled)
-            return _fallback.Generate(emotion, mode, safety, uncertainty, userMessage, displayName);
+            return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
 
         var apiKey = _configuration["Companion:Llm:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             _logger.LogWarning("Companion:Llm:Enabled is true but ApiKey is missing — using template fallback.");
-            return _fallback.Generate(emotion, mode, safety, uncertainty, userMessage, displayName);
+            return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
         }
 
         try
         {
-            var reply = CallChatCompletions(apiKey, emotion, mode, safety, uncertainty, userMessage, displayName);
-            if (string.IsNullOrWhiteSpace(reply))
+            var content = await CallChatCompletionsAsync(apiKey, context, cancellationToken)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(content))
             {
                 _logger.LogWarning("LLM returned empty content — using template fallback.");
-                return _fallback.Generate(emotion, mode, safety, uncertainty, userMessage, displayName);
+                return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
             }
 
-            return reply.Trim();
+            return new CompanionReply
+            {
+                Message = content.Trim(),
+                ProviderId = ProviderId,
+                ExposedEmotionToUser = false
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
+            // Timeouts / HTTP failures → template fallback.
             _logger.LogWarning(ex, "LLM companion call failed — using template fallback.");
-            return _fallback.Generate(emotion, mode, safety, uncertainty, userMessage, displayName);
+            return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private string? CallChatCompletions(
+    private async Task<string?> CallChatCompletionsAsync(
         string apiKey,
-        EmotionResult emotion,
-        CompanionInteractionMode mode,
-        SafetyAssessment safety,
-        UncertaintyLevel uncertainty,
-        string? userMessage,
-        string? displayName)
+        CompanionContext context,
+        CancellationToken cancellationToken)
     {
         var baseUrl = (_configuration["Companion:Llm:BaseUrl"] ?? "https://api.openai.com/v1").TrimEnd('/');
         var model = _configuration["Companion:Llm:Model"] ?? "gpt-4o-mini";
@@ -88,10 +100,9 @@ public sealed class LlmCompanionProvider : ICompanionProvider
 
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 3, 60));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        var system = BuildSystemPrompt();
-        var user = BuildUserPayload(emotion, mode, safety, uncertainty, userMessage, displayName);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
         var body = new
         {
@@ -100,21 +111,19 @@ public sealed class LlmCompanionProvider : ICompanionProvider
             max_tokens = 280,
             messages = new object[]
             {
-                new { role = "system", content = system },
-                new { role = "user", content = user }
+                new { role = "system", content = BuildSystemPrompt(context) },
+                new { role = "user", content = BuildUserPayload(context) }
             }
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions")
-        {
-            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
-        };
+        request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
 
-        using var response = client.Send(request);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        using var stream = response.Content.ReadAsStream();
-        using var doc = JsonDocument.Parse(stream);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
         if (!doc.RootElement.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0)
             return null;
 
@@ -122,37 +131,63 @@ public sealed class LlmCompanionProvider : ICompanionProvider
         return message.TryGetProperty("content", out var content) ? content.GetString() : null;
     }
 
-    private static string BuildSystemPrompt() =>
-        """
-        You are NeuroSync, an emotion-aware wellbeing companion.
-        Be conversational, warm, curious, and occasionally playful.
-        Do not pretend to be human. Do not constantly talk about emotions.
-        Respond to the user's actual request first.
-        Do not state inferred emotions as facts. Do not expose model scores.
-        Never diagnose mental-health conditions.
-        Safety rules override personality. Keep replies concise (2–5 sentences).
-        """;
-
-    private static string BuildUserPayload(
-        EmotionResult emotion,
-        CompanionInteractionMode mode,
-        SafetyAssessment safety,
-        UncertaintyLevel uncertainty,
-        string? userMessage,
-        string? displayName)
+    private static string BuildSystemPrompt(CompanionContext context)
     {
         var sb = new StringBuilder();
+        sb.AppendLine(
+            """
+            You are NeuroSync, an emotion-aware wellbeing companion.
+            Be conversational, warm, curious, and occasionally playful.
+            Do not pretend to be human. Do not constantly talk about emotions.
+            Respond to the user's actual request first.
+            Do not state inferred emotions as facts. Do not expose model scores.
+            Never diagnose mental-health conditions.
+            You do NOT decide safety policy and you do NOT execute IoT or device actions.
+            Safety rules override personality. Keep replies concise (2–5 sentences).
+            """);
+        if (!string.IsNullOrWhiteSpace(context.PolicyGuidance))
+            sb.AppendLine(context.PolicyGuidance.Trim());
+        return sb.ToString();
+    }
+
+    private static string BuildUserPayload(CompanionContext context)
+    {
+        var emotion = context.Emotion;
+        var sb = new StringBuilder();
         sb.AppendLine("Structured context (do not quote scores to the user):");
-        sb.AppendLine($"displayName: {(string.IsNullOrWhiteSpace(displayName) ? "(none)" : displayName.Trim())}");
-        sb.AppendLine($"mode: {mode}");
-        sb.AppendLine($"safety: {safety.Level}");
-        sb.AppendLine($"uncertainty: {uncertainty}");
-        sb.AppendLine($"understoodAs: {emotion.UnderstoodAs ?? "(none)"}");
-        sb.AppendLine($"primaryEmotion: {emotion.Emotion}");
-        sb.AppendLine($"confidence: {emotion.Confidence:F2}");
+        sb.AppendLine($"displayName: {(string.IsNullOrWhiteSpace(context.DisplayName) ? "(none)" : context.DisplayName.Trim())}");
+        sb.AppendLine($"intent: {context.Intent}");
+        sb.AppendLine($"mode: {context.Mode}");
+        sb.AppendLine($"safety: {context.Safety.Level}");
+        sb.AppendLine($"uncertainty: {context.Uncertainty}");
+        sb.AppendLine($"understoodAs: {emotion?.UnderstoodAs ?? "(none)"}");
+        sb.AppendLine($"primaryEmotion: {emotion?.Emotion.ToString() ?? "(none)"}");
+        if (emotion != null)
+            sb.AppendLine($"confidence: {emotion.Confidence:F2}");
+
+        if (context.EmotionSignals.Count > 0)
+        {
+            sb.AppendLine("emotionSignals:");
+            foreach (var kv in context.EmotionSignals.Take(8))
+                sb.AppendLine($"  {kv.Key}: {kv.Value:F2}");
+        }
+
+        if (context.RecentTurns.Count > 0)
+        {
+            sb.AppendLine("recentTurns:");
+            foreach (var turn in context.RecentTurns.Take(6))
+                sb.AppendLine($"  [{turn.Role}] {turn.Text}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(context.RelevantMemory))
+        {
+            sb.AppendLine("relevantMemory (consent-approved):");
+            sb.AppendLine(context.RelevantMemory.Trim());
+        }
+
         sb.AppendLine();
         sb.AppendLine("User message:");
-        sb.AppendLine(string.IsNullOrWhiteSpace(userMessage) ? "(no text)" : userMessage.Trim());
+        sb.AppendLine(string.IsNullOrWhiteSpace(context.CurrentMessage) ? "(no text)" : context.CurrentMessage.Trim());
         return sb.ToString();
     }
 }

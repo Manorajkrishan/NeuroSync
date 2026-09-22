@@ -45,7 +45,7 @@ public class CompanionController : ControllerBase
         try
         {
             var emotionResult = _emotionDetection.DetectEmotion(request.Text);
-            var adaptive = _decisionEngine.GenerateResponse(emotionResult, userId, request.Text);
+            var adaptive = await _decisionEngine.GenerateResponseAsync(emotionResult, userId, request.Text);
 
             // Learning / real-world collection: OFF unless DataSharingConsent
             TryCollectLearningData(userId, request.Text, emotionResult);

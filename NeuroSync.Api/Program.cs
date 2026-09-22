@@ -230,21 +230,21 @@ builder.Services.AddSingleton<CompanionModeService>();
 builder.Services.AddSingleton<EmotionalBaselineService>();
 builder.Services.AddSingleton<IntentRouterService>();
 builder.Services.AddSingleton<ResponsePolicyService>();
-builder.Services.AddSingleton<ICompanionResponseService, CompanionResponseService>();
 builder.Services.AddSingleton<TemplateCompanionProvider>();
 builder.Services.AddSingleton<ICompanionProvider>(sp =>
 {
-    var config = sp.GetRequiredService<IConfiguration>();
     var template = sp.GetRequiredService<TemplateCompanionProvider>();
-    if (!config.GetValue("Companion:Llm:Enabled", false))
-        return template;
-
+    // Always wrap so disabled/missing-key/timeout paths share TemplateCompanionProvider fallback.
     return new LlmCompanionProvider(
         template,
         sp.GetRequiredService<IHttpClientFactory>(),
-        config,
+        sp.GetRequiredService<IConfiguration>(),
         sp.GetRequiredService<ILogger<LlmCompanionProvider>>());
 });
+builder.Services.AddSingleton<ICompanionResponseService>(sp =>
+    new CompanionResponseService(
+        sp.GetRequiredService<ResponsePolicyService>(),
+        sp.GetRequiredService<ICompanionProvider>()));
 builder.Services.AddSingleton<IEmotionAiClient, MlNetEmotionAiClient>();
 
 // Add Person Memory

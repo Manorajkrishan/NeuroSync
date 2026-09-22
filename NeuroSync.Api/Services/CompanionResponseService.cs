@@ -99,7 +99,7 @@ public class CompanionResponseService : ICompanionResponseService
         var m = (ctx.UserMessage ?? "").ToLowerInvariant();
         if (m.Contains("miss her") || m.Contains("miss him") || m.Contains("miss them") || m.Contains("i miss"))
         {
-            return ctx.Mode == CompanionInteractionMode.Listen || true
+            return ctx.Mode == CompanionInteractionMode.Listen
                 ? Pick(
                     "Yeah… that can hit hard. Do you want to talk about them, or do you just want some company for a bit?",
                     "Ahh… one of those moments? What are you missing most — them, the memories, or just having someone there?",

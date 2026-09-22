@@ -51,18 +51,21 @@ public class PrivacyController : ControllerBase
     [HttpGet("memory/{userId}")]
     public IActionResult GetMemory(string userId, [FromQuery] int recent = 20)
     {
-        if (!_consent.HasConsent(userId, ConsentType.Memory) && !_consent.HasConsent(userId, ConsentType.EmotionHistory))
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+
+        if (!_consent.HasConsent(safe, ConsentType.Memory) && !_consent.HasConsent(safe, ConsentType.EmotionHistory))
         {
             return Ok(new
             {
                 disclaimer = "MemoryConsent / EmotionHistoryConsent are OFF. Enable them to store and view history.",
                 memoryEnabled = false,
-                consent = _consent.GetOrCreateDefault(userId)
+                consent = _consent.GetOrCreateDefault(safe)
             });
         }
 
-        var profile = _profiles.GetOrCreateProfile(userId);
-        var history = _memory.GetRecentHistory(userId, Math.Clamp(recent, 1, 100));
+        var profile = _profiles.GetOrCreateProfile(safe);
+        var history = _memory.GetRecentHistory(safe, Math.Clamp(recent, 1, 100));
         return Ok(new
         {
             disclaimer = "You control this memory. Export or delete anytime.",
@@ -79,21 +82,24 @@ public class PrivacyController : ControllerBase
                 uncertainty = h.DetectedEmotion?.Uncertainty.ToString(),
                 response = h.Response?.Message
             }),
-            timeline = _memory.GetEmotionalTimeline(userId),
-            baseline = _baseline.GetSnapshot(userId)
+            timeline = _memory.GetEmotionalTimeline(safe),
+            baseline = _baseline.GetSnapshot(safe)
         });
     }
 
     [HttpGet("export/{userId}")]
     public IActionResult Export(string userId)
     {
-        var profile = _profiles.GetOrCreateProfile(userId);
-        var history = _memory.GetRecentHistory(userId, 100);
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+
+        var profile = _profiles.GetOrCreateProfile(safe);
+        var history = _memory.GetRecentHistory(safe, 100);
         var payload = new
         {
             exportedAt = DateTime.UtcNow,
             disclaimer = "Personal export. Handle securely. Not a medical record.",
-            consent = _consent.GetOrCreateDefault(userId),
+            consent = _consent.GetOrCreateDefault(safe),
             profile = new
             {
                 profile.UserId,
@@ -112,39 +118,53 @@ public class PrivacyController : ControllerBase
                 uncertainty = h.DetectedEmotion?.Uncertainty.ToString(),
                 response = h.Response?.Message
             }),
-            baseline = _baseline.GetSnapshot(userId),
-            timeline = _memory.GetEmotionalTimeline(userId, 90)
+            baseline = _baseline.GetSnapshot(safe),
+            timeline = _memory.GetEmotionalTimeline(safe, 90)
         };
         return Ok(payload);
     }
 
     [HttpGet("baseline/{userId}")]
-    public IActionResult GetBaseline(string userId) => Ok(_baseline.GetSnapshot(userId));
+    public IActionResult GetBaseline(string userId)
+    {
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+        return Ok(_baseline.GetSnapshot(safe));
+    }
 
     [HttpPost("baseline/{userId}/reset")]
     public IActionResult ResetBaseline(string userId)
     {
-        _baseline.ResetBaselineHistory(userId);
-        return Ok(new { reset = true, baseline = _baseline.GetSnapshot(userId) });
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+        _baseline.ResetBaselineHistory(safe);
+        return Ok(new { reset = true, baseline = _baseline.GetSnapshot(safe) });
     }
 
     [HttpGet("timeline/{userId}")]
-    public IActionResult GetTimeline(string userId, [FromQuery] int days = 14) =>
-        Ok(new
+    public IActionResult GetTimeline(string userId, [FromQuery] int days = 14)
+    {
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+        return Ok(new
         {
             disclaimer = "Privacy-controlled emotional timeline. Estimates only — not a clinical record.",
             days,
-            points = _memory.GetEmotionalTimeline(userId, days)
+            points = _memory.GetEmotionalTimeline(safe, days)
         });
+    }
 
     /// <summary>Delete NeuroSync history permanently for this user id.</summary>
     [HttpDelete("memory/{userId}")]
     public IActionResult DeleteMemory(string userId)
     {
-        _memory.ClearUserData(userId);
-        _profiles.DeleteProfile(userId);
-        _consent.RevokeAllSensitive(userId);
-        _logger.LogInformation("Permanent delete requested (userId length={Len})", userId.Length);
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return BadRequest(new { error = "Invalid userId" });
+
+        _memory.ClearUserData(safe);
+        _profiles.DeleteProfile(safe);
+        _consent.RevokeAllSensitive(safe);
+        _logger.LogInformation("Permanent delete requested (userId length={Len})", safe.Length);
         return Ok(new
         {
             deleted = true,

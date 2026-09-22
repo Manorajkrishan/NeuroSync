@@ -18,6 +18,7 @@ public class ApiKeyAuthMiddleware
         new("/swagger"),
         new("/index.html"),
         new("/v1.html"),
+        new("/legacy/index.html"),
         new("/favicon.ico")
     };
 

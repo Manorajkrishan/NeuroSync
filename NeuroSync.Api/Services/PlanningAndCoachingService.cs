@@ -336,10 +336,16 @@ public class PlanningAndCoachingService
     {
         try
         {
-            if (!_userGoals.TryGetValue(userId, out var goals))
+            if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            {
+                _logger.LogWarning("Refusing to save goals for unsafe userId");
+                return;
+            }
+
+            if (!_userGoals.TryGetValue(userId, out var goals) && !_userGoals.TryGetValue(safe, out goals))
                 return;
 
-            var filePath = Path.Combine(_storagePath, $"{userId}_goals.json");
+            var filePath = Path.Combine(_storagePath, $"{safe}_goals.json");
             var json = System.Text.Json.JsonSerializer.Serialize(goals, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }
@@ -353,10 +359,16 @@ public class PlanningAndCoachingService
     {
         try
         {
-            if (!_userReminders.TryGetValue(userId, out var reminders))
+            if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            {
+                _logger.LogWarning("Refusing to save reminders for unsafe userId");
+                return;
+            }
+
+            if (!_userReminders.TryGetValue(userId, out var reminders) && !_userReminders.TryGetValue(safe, out reminders))
                 return;
 
-            var filePath = Path.Combine(_storagePath, $"{userId}_reminders.json");
+            var filePath = Path.Combine(_storagePath, $"{safe}_reminders.json");
             var json = System.Text.Json.JsonSerializer.Serialize(reminders, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }
@@ -370,7 +382,13 @@ public class PlanningAndCoachingService
     {
         try
         {
-            var filePath = Path.Combine(_storagePath, $"{plan.UserId}_plan_{plan.PlanId}.json");
+            if (!UserIdSanitizer.TryNormalize(plan.UserId, out var safe))
+            {
+                _logger.LogWarning("Refusing to save plan for unsafe userId");
+                return;
+            }
+
+            var filePath = Path.Combine(_storagePath, $"{safe}_plan_{plan.PlanId}.json");
             var json = System.Text.Json.JsonSerializer.Serialize(plan, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }

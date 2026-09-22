@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using System.Net.Http.Json;
+using NeuroSync.Core;
 
 namespace NeuroSync.Api.Services;
 
@@ -37,6 +38,16 @@ public class VoiceService
         {
             _httpClient.DefaultRequestHeaders.Add("xi-api-key", _elevenLabsApiKey);
         }
+    }
+
+    private string? SafeUserDir(string? userId)
+    {
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+        {
+            _logger.LogWarning("Refusing voice storage path for unsafe userId");
+            return null;
+        }
+        return Path.Combine(_voiceStoragePath, safe);
     }
 
     /// <summary>
@@ -91,10 +102,14 @@ public class VoiceService
             return null;
         }
 
+        var userDir = SafeUserDir(userId);
+        if (userDir == null)
+            return null;
+
         try
         {
             // Check if we have a cloned voice for this user
-            var voiceClonePath = Path.Combine(_voiceStoragePath, userId, $"{voiceId}.json");
+            var voiceClonePath = Path.Combine(userDir, $"{voiceId}.json");
             if (!File.Exists(voiceClonePath))
             {
                 _logger.LogWarning($"Voice clone not found for voiceId: {voiceId}");
@@ -132,7 +147,7 @@ public class VoiceService
                 var audioBytes = await response.Content.ReadAsByteArrayAsync();
                 
                 // Save audio file temporarily
-                var audioPath = Path.Combine(_voiceStoragePath, userId, $"temp_{Guid.NewGuid()}.mp3");
+                var audioPath = Path.Combine(userDir, $"temp_{Guid.NewGuid()}.mp3");
                 await File.WriteAllBytesAsync(audioPath, audioBytes);
 
                 return new VoiceResponse
@@ -176,7 +191,15 @@ public class VoiceService
             try
             {
                 // Create user directory if it doesn't exist
-                var userDir = Path.Combine(_voiceStoragePath, userId);
+                var userDir = SafeUserDir(userId);
+                if (userDir == null)
+                {
+                    return new VoiceCloneResult
+                    {
+                        Success = false,
+                        Error = "Invalid userId"
+                    };
+                }
                 if (!Directory.Exists(userDir))
                 {
                     Directory.CreateDirectory(userDir);
@@ -230,7 +253,15 @@ public class VoiceService
         try
         {
             // Create user directory if it doesn't exist
-            var userDir = Path.Combine(_voiceStoragePath, userId);
+            var userDir = SafeUserDir(userId);
+            if (userDir == null)
+            {
+                return new VoiceCloneResult
+                {
+                    Success = false,
+                    Error = "Invalid userId"
+                };
+            }
             if (!Directory.Exists(userDir))
             {
                 Directory.CreateDirectory(userDir);
@@ -316,8 +347,8 @@ public class VoiceService
     /// </summary>
     public List<VoiceCloneInfo> GetClonedVoices(string userId)
     {
-        var userDir = Path.Combine(_voiceStoragePath, userId);
-        if (!Directory.Exists(userDir))
+        var userDir = SafeUserDir(userId);
+        if (userDir == null || !Directory.Exists(userDir))
         {
             return new List<VoiceCloneInfo>();
         }

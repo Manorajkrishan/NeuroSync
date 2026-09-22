@@ -8,7 +8,7 @@ cd NeuroSync.Api
 dotnet run
 ```
 
-Open `http://localhost:5063/v1.html`
+Open `http://localhost:5063/` (V1 companion UI; `/v1.html` remains an alias)
 
 ## Production (Docker)
 

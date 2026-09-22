@@ -11,6 +11,8 @@ appsettings.Development.json
 **/UserProfiles/
 **/UserConsents/
 **/ConnectedDevices/
+**/VoiceNotes/
+**/VoiceClones/
 
 # User files
 *.user

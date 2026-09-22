@@ -33,7 +33,9 @@ public class UserProfileService
     /// </summary>
     public UserProfile GetOrCreateProfile(string userId)
     {
-        return _profiles.GetOrAdd(userId, _ => new UserProfile { UserId = userId });
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            safe = UserIdSanitizer.DefaultUserId;
+        return _profiles.GetOrAdd(safe, id => new UserProfile { UserId = id });
     }
 
     /// <summary>
@@ -331,7 +333,13 @@ public class UserProfileService
     {
         try
         {
-            var filePath = Path.Combine(_storagePath, $"{profile.UserId}.json");
+            if (!UserIdSanitizer.TryNormalize(profile.UserId, out var safe))
+            {
+                _logger.LogWarning("Refusing to save profile for unsafe userId");
+                return;
+            }
+
+            var filePath = Path.Combine(_storagePath, $"{safe}.json");
             var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(filePath, json);
         }
@@ -344,20 +352,26 @@ public class UserProfileService
     /// <summary>Privacy control: remove stored profile for a user.</summary>
     public bool DeleteProfile(string userId)
     {
-        _profiles.TryRemove(userId, out _);
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+        {
+            _logger.LogWarning("Refusing to delete profile for unsafe userId");
+            return false;
+        }
+
+        _profiles.TryRemove(safe, out _);
         try
         {
-            var filePath = Path.Combine(_storagePath, $"{userId}.json");
+            var filePath = Path.Combine(_storagePath, $"{safe}.json");
             if (File.Exists(filePath))
             {
                 File.Delete(filePath);
-                _logger.LogInformation("Deleted profile for {UserId}", userId);
+                _logger.LogInformation("Deleted profile for {UserId}", safe);
             }
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting profile for {UserId}", userId);
+            _logger.LogError(ex, "Error deleting profile for {UserId}", safe);
             return false;
         }
     }

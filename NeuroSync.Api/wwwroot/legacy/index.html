@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NeuroSync">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>NeuroSync — Wellbeing companion</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+    <div class="companion-container">
+        <!-- Header with Avatar -->
+        <div class="companion-header">
+            <div class="header-left">
+                <div class="avatar-wrapper">
+                    <div id="companionAvatar" class="companion-avatar neutral" title="Your AI Companion">
+                        <div class="avatar-emoji">👶</div>
+                        <div class="avatar-pulse"></div>
+                    </div>
+                    <div class="status-indicator">
+                        <span id="statusDot" class="status-dot offline"></span>
+                        <span id="statusText" class="status-text">Connecting...</span>
+                    </div>
+                </div>
+                <div class="header-info">
+                    <h1>NeuroSync</h1>
+                    <p class="subtitle" id="companionSubtitle">Your best friend · always here to listen</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="icon-btn dashboard-btn" title="V1 companion" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px;">
+                  V1 Companion
+                </a>
+                <a href="/dashboard.html" class="icon-btn dashboard-btn" title="Experimental dashboard" style="text-decoration: none; color: inherit; padding: 8px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; margin-right: 8px; display: inline-flex; align-items: center; gap: 6px; opacity:.7;">
+                  Dashboard (exp.)
+                </a>
+                <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chatMessages" class="chat-messages">
+            <div class="welcome-message">
+                <div class="message-avatar">💛</div>
+                <div class="message-bubble ai-message">
+                    <div class="message-text">Hey. I'm NeuroSync — an emotion-aware wellbeing companion (not a doctor or therapist). I can be unsure, I ask before environment actions, and you control memory. How are you, really?</div>
+                    <div class="message-time">Just now</div>
+                </div>
+            </div>
+            <div class="safe-space-note">Safe space · Not a doctor — if you're in crisis, please also reach a trusted person or local helpline</div>
+        </div>
+
+        <!-- Quick Emotion Buttons (Contextual) -->
+        <div id="quickEmotions" class="quick-emotions" style="display: none;">
+            <button class="emotion-quick-btn" data-emotion="happy">😊 Happy</button>
+            <button class="emotion-quick-btn" data-emotion="sad">😢 Sad</button>
+            <button class="emotion-quick-btn" data-emotion="anxious">😰 Anxious</button>
+            <button class="emotion-quick-btn" data-emotion="calm">😌 Calm</button>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="Share anything… I'm listening" 
+                    rows="1"></textarea>
+                <div class="input-actions">
+                    <button class="input-action-btn" id="voiceBtn" title="Record Voice">🎤</button>
+                    <button class="input-action-btn" id="sendBtn" title="Send">➤</button>
+                </div>
+            </div>
+            <div id="recordingStatus" class="recording-status" style="display: none;">
+                <span class="recording-indicator">●</span>
+                <span>Recording... Click to stop</span>
+            </div>
+        </div>
+
+        <!-- Sidebar (Settings, Advanced Features) -->
+        <div id="sidebar" class="sidebar" style="display: none;">
+            <div class="sidebar-header">
+                <h3>Settings</h3>
+                <button class="close-btn" id="closeSidebarBtn">✕</button>
+            </div>
+            <div class="sidebar-content">
+                <!-- TTS Toggle -->
+                <div class="sidebar-section">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="ttsToggle">
+                        <span>Text-to-Speech</span>
+                        <span id="ttsStatus" class="toggle-status">Off</span>
+                    </label>
+                </div>
+
+                <!-- Voice Cloning -->
+                <div class="sidebar-section">
+                    <h4>🎭 Voice Cloning</h4>
+                    <input type="text" id="voiceClonePersonName" placeholder="Person's name" class="sidebar-input">
+                    <input type="file" id="voiceCloneFile" accept="audio/*" style="display: none;">
+                    <button class="sidebar-btn" id="uploadVoiceBtn">Upload Voice Sample</button>
+                    <div id="voiceCloneStatus" class="sidebar-status"></div>
+                </div>
+
+                <!-- Consent Settings -->
+                <div class="sidebar-section">
+                    <h4>🔒 Privacy & Consent</h4>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="consentEmotionSensing">
+                        <span>Emotion Sensing</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="consentVisualLayer">
+                        <span>Visual Layer (Camera)</span>
+                    </label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="consentAudioLayer">
+                        <span>Audio Layer</span>
+                    </label>
+                </div>
+
+                <!-- Voice Notes -->
+                <div class="sidebar-section">
+                    <h4>🎤 Voice Notes</h4>
+                    <div id="voiceNotesList" class="voice-notes-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera Overlay -->
+        <div id="cameraOverlay" class="camera-overlay" style="display: none;">
+            <div class="camera-container">
+                <div class="camera-header">
+                    <h3>Facial Expression Detection</h3>
+                    <button class="close-btn" id="closeCameraBtn">✕</button>
+                </div>
+                <video id="videoElement" autoplay playsinline></video>
+                <canvas id="canvasElement" style="display: none;"></canvas>
+                <div id="facialEmotionDisplay" class="facial-emotion-display" style="display: none;">
+                    <div class="facial-emotion-badge" id="facialEmotionBadge"></div>
+                    <div class="facial-confidence" id="facialConfidence"></div>
+                </div>
+                <button id="startCameraBtn" class="camera-btn">📷 Start Detection</button>
+                <button id="stopCameraBtn" class="camera-btn stop-btn" style="display: none;">⏹️ Stop</button>
+            </div>
+        </div>
+
+        <!-- Audio player for voice notes (hidden until playback) -->
+        <audio id="audioPlayer" controls style="display: none; width: 100%; max-width: 320px; margin-top: 8px;"></audio>
+
+        <!-- Overlay (for sidebar/camera) -->
+        <div id="overlay" class="overlay" style="display: none;"></div>
+
+        <!-- Always-on Corner Camera Widget (experimental — OFF until FaceAnalysisConsent) -->
+        <div id="cornerCamera" class="corner-camera collapsed" style="display: none;" data-experimental="true">
+            <div class="corner-camera-header">
+                <span class="corner-camera-title">📷 Face (experimental)</span>
+                <button class="corner-camera-toggle" id="cornerCameraToggle" title="Toggle Camera">👁️</button>
+            </div>
+            <div class="corner-camera-content">
+                <video id="cornerVideoElement" autoplay playsinline muted></video>
+                <canvas id="cornerCanvasElement" style="display: none;"></canvas>
+                <div id="cornerEmotionDisplay" class="corner-emotion-display">
+                    <div class="corner-emotion-badge" id="cornerEmotionBadge">Neutral</div>
+                    <div class="corner-emotion-confidence" id="cornerEmotionConfidence">--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts - ORDER MATTERS: app.js must load first to define initializeSignalR -->
+    <script src="app.js?v=4.0"></script>
+    <script src="device-sync.js?v=1.0"></script>
+    <script src="face-cues.js?v=1.0"></script>
+    <script src="facial-detection.js?v=1.3"></script>
+    <script src="voice-cloning.js?v=1.0"></script>
+    <script src="companion-ui.js?v=2.9"></script>
+</body>
+</html>

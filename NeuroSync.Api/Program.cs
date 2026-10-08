@@ -210,6 +210,9 @@ builder.Services.AddSingleton<IoTDeviceSimulator>();
 // Add Conversation Memory (singleton to maintain state across requests)
 builder.Services.AddSingleton<ConversationMemory>();
 
+// RAM-only session turns (no consent; never persisted)
+builder.Services.AddSingleton<EphemeralSessionContextService>();
+
 // Add Emotional Intelligence
 builder.Services.AddSingleton<EmotionalIntelligence>();
 
@@ -273,11 +276,12 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var baseline = sp.GetService<EmotionalBaselineService>();
     var provider = sp.GetService<ICompanionProvider>();
     var consent = sp.GetService<EthicalAIFrameworkService>();
+    var ephemeralSession = sp.GetService<EphemeralSessionContextService>();
     return new DecisionEngine(
         iotSimulator, realIoTController, logger,
         safetyGate, intents, modes, policy, responder,
         conversationMemory, companion, baseline, consent,
-        emotionalIntelligence, provider);
+        emotionalIntelligence, provider, ephemeralSession);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>

@@ -8,6 +8,7 @@ let currentUserId = (typeof localStorage !== 'undefined' && localStorage.getItem
     || sessionStorage.getItem('neuroSync_userId')
     || sessionStorage.getItem('userId')
     || 'default';
+let companionSessionId = sessionStorage.getItem('neuroSync_companionSessionId') || null;
 if (currentUserId && currentUserId !== 'default') {
     try { localStorage.setItem('neuroSync_userId', currentUserId); } catch (_) {}
     sessionStorage.setItem('neuroSync_userId', currentUserId);
@@ -394,13 +395,21 @@ function sendCompanionMessage(text) {
         headers: (typeof window.neurosyncHeaders === 'function')
             ? window.neurosyncHeaders()
             : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, userId: currentUserId })
+        body: JSON.stringify({
+            text,
+            userId: currentUserId,
+            sessionId: companionSessionId
+        })
     })
     .then(res => res.json().then(data => ({ ok: res.ok, data })))
     .then(({ ok, data }) => {
         if (!ok) {
             addChatMessage(data.error || 'Something went wrong.', 'ai');
             return;
+        }
+        if (data.sessionId) {
+            companionSessionId = data.sessionId;
+            try { sessionStorage.setItem('neuroSync_companionSessionId', companionSessionId); } catch (_) {}
         }
         // Chat: ONLY natural companion text
         displayAdaptiveResponse({
@@ -445,10 +454,14 @@ function sendEmotionDetectionRequest(text, userId, apiBaseUrl) {
         headers: (typeof window.neurosyncHeaders === 'function')
             ? window.neurosyncHeaders()
             : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, userId })
+        body: JSON.stringify({ text, userId, sessionId: companionSessionId })
     })
     .then(res => res.json())
     .then(data => {
+        if (data.sessionId) {
+            companionSessionId = data.sessionId;
+            try { sessionStorage.setItem('neuroSync_companionSessionId', companionSessionId); } catch (_) {}
+        }
         if (data.message) {
             displayAdaptiveResponse({
                 message: data.message,

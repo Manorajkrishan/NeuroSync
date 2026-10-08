@@ -42,4 +42,8 @@ public static class UserIdSanitizer
 
     public static string NormalizeOrDefault(string? userId) =>
         TryNormalize(userId, out var n) ? n : DefaultUserId;
+
+    /// <summary>Same charset rules as userId — safe for in-memory session keys.</summary>
+    public static bool TryNormalizeSessionId(string? sessionId, out string normalized) =>
+        TryNormalize(sessionId, out normalized);
 }

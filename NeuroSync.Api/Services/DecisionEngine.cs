@@ -23,6 +23,7 @@ public class DecisionEngine
     private readonly ResponsePolicyService _policy;
     private readonly ICompanionResponseService _responder;
     private readonly EthicalAIFrameworkService? _consent;
+    private readonly EphemeralSessionContextService? _ephemeralSession;
 
     public DecisionEngine(
         IoTDeviceSimulator iotSimulator,
@@ -38,7 +39,8 @@ public class DecisionEngine
         EmotionalBaselineService? baseline = null,
         EthicalAIFrameworkService? consent = null,
         EmotionalIntelligence? emotionalIntelligence = null,
-        ICompanionProvider? companionProvider = null)
+        ICompanionProvider? companionProvider = null,
+        EphemeralSessionContextService? ephemeralSession = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
@@ -52,18 +54,25 @@ public class DecisionEngine
         _companion = companion;
         _baseline = baseline;
         _consent = consent;
+        _ephemeralSession = ephemeralSession;
         // companionProvider is optional; CompanionResponseService already holds ICompanionProvider.
         _ = companionProvider;
         _ = emotionalIntelligence;
     }
 
-    public AdaptiveResponse GenerateResponse(EmotionResult emotionResult, string? userId = "default", string? userMessage = null)
-        => GenerateResponseAsync(emotionResult, userId, userMessage).GetAwaiter().GetResult();
+    public AdaptiveResponse GenerateResponse(
+        EmotionResult emotionResult,
+        string? userId = "default",
+        string? userMessage = null,
+        string? sessionId = null)
+        => GenerateResponseAsync(emotionResult, userId, userMessage, sessionId, cancellationToken: default)
+            .GetAwaiter().GetResult();
 
     public async Task<AdaptiveResponse> GenerateResponseAsync(
         EmotionResult emotionResult,
         string? userId = "default",
         string? userMessage = null,
+        string? sessionId = null,
         CancellationToken cancellationToken = default)
     {
         userId ??= "default";
@@ -124,7 +133,7 @@ public class DecisionEngine
             ? new Dictionary<string, float>(emotionResult.SignalEstimates)
             : new Dictionary<string, float> { [emotionResult.Emotion.ToString()] = emotionResult.Confidence };
 
-        var recentTurns = BuildRecentTurns(context, memoryAllowed);
+        var recentTurns = BuildRecentTurns(userId, sessionId, context, memoryAllowed);
         var relevantMemory = memoryAllowed ? BuildRelevantMemory(turn, context) : null;
 
         var turnCtx = new CompanionContext
@@ -226,42 +235,65 @@ public class DecisionEngine
         if (_conversationMemory != null && memoryAllowed && !string.IsNullOrEmpty(userMessage))
             _conversationMemory.AddEntry(userId, userMessage, emotionResult, response, null);
 
+        if (_ephemeralSession != null
+            && !string.IsNullOrWhiteSpace(sessionId)
+            && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
+        {
+            _ephemeralSession.AppendTurn(userId, sessionId, userMessage, response.Message);
+        }
+
         return response;
     }
 
-    private static IReadOnlyList<CompanionConversationTurn> BuildRecentTurns(
+    private IReadOnlyList<CompanionConversationTurn> BuildRecentTurns(
+        string userId,
+        string? sessionId,
         ConversationContext? context,
         bool memoryAllowed)
     {
-        if (!memoryAllowed || context?.History == null || context.History.Count == 0)
-            return Array.Empty<CompanionConversationTurn>();
-
         var turns = new List<CompanionConversationTurn>();
-        foreach (var entry in context.History.TakeLast(4))
-        {
-            if (!string.IsNullOrWhiteSpace(entry.UserMessage))
-            {
-                turns.Add(new CompanionConversationTurn
-                {
-                    Role = "user",
-                    Text = entry.UserMessage.Trim(),
-                    Timestamp = entry.Timestamp
-                });
-            }
 
-            var assistant = entry.Response?.Message;
-            if (!string.IsNullOrWhiteSpace(assistant))
+        if (_ephemeralSession != null
+            && !string.IsNullOrWhiteSpace(sessionId)
+            && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
+        {
+            turns.AddRange(_ephemeralSession.GetRecentTurns(userId, sessionId));
+        }
+
+        if (memoryAllowed && context?.History != null && context.History.Count > 0)
+        {
+            foreach (var entry in context.History.TakeLast(4))
             {
-                turns.Add(new CompanionConversationTurn
+                if (!string.IsNullOrWhiteSpace(entry.UserMessage))
                 {
-                    Role = "assistant",
-                    Text = assistant.Trim(),
-                    Timestamp = entry.Timestamp
-                });
+                    turns.Add(new CompanionConversationTurn
+                    {
+                        Role = "user",
+                        Text = entry.UserMessage.Trim(),
+                        Timestamp = entry.Timestamp
+                    });
+                }
+
+                var assistant = entry.Response?.Message;
+                if (!string.IsNullOrWhiteSpace(assistant))
+                {
+                    turns.Add(new CompanionConversationTurn
+                    {
+                        Role = "assistant",
+                        Text = assistant.Trim(),
+                        Timestamp = entry.Timestamp
+                    });
+                }
             }
         }
 
-        return turns;
+        if (turns.Count == 0)
+            return Array.Empty<CompanionConversationTurn>();
+
+        return turns
+            .OrderBy(t => t.Timestamp)
+            .TakeLast(10)
+            .ToList();
     }
 
     private static string? BuildRelevantMemory(CompanionTurn? turn, ConversationContext? context)

@@ -44,8 +44,10 @@ public class CompanionController : ControllerBase
 
         try
         {
+            var sessionId = ResolveSessionId(request.SessionId);
             var emotionResult = _emotionDetection.DetectEmotion(request.Text);
-            var adaptive = await _decisionEngine.GenerateResponseAsync(emotionResult, userId, request.Text);
+            var adaptive = await _decisionEngine.GenerateResponseAsync(
+                emotionResult, userId, request.Text, sessionId);
 
             // Learning / real-world collection: OFF unless DataSharingConsent
             TryCollectLearningData(userId, request.Text, emotionResult);
@@ -86,6 +88,7 @@ public class CompanionController : ControllerBase
             return Ok(new
             {
                 message = adaptive.Message,
+                sessionId,
                 mode = p.TryGetValue("interactionMode", out var mode) ? mode : null,
                 uncertainty = p.TryGetValue("uncertainty", out var unc) ? unc : emotionResult.Uncertainty.ToString(),
                 actionOffer,
@@ -99,6 +102,17 @@ public class CompanionController : ControllerBase
             _logger.LogError(ex, "Companion message failed");
             return StatusCode(500, new { error = "An error occurred while processing the request" });
         }
+    }
+
+    private string ResolveSessionId(string? requested)
+    {
+        if (!string.IsNullOrWhiteSpace(requested)
+            && UserIdSanitizer.TryNormalizeSessionId(requested, out var normalized))
+        {
+            return normalized;
+        }
+
+        return EphemeralSessionContextService.GenerateSessionId();
     }
 
     private void TryCollectLearningData(string userId, string text, EmotionResult emotionResult)
@@ -118,4 +132,7 @@ public class CompanionMessageRequest
 {
     public string Text { get; set; } = string.Empty;
     public string? UserId { get; set; }
+
+    /// <summary>Optional client session id (tab-scoped). Server issues one when missing.</summary>
+    public string? SessionId { get; set; }
 }

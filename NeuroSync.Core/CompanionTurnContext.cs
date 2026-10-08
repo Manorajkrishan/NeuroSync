@@ -31,7 +31,7 @@ public class CompanionContext
     public IReadOnlyDictionary<string, float> EmotionSignals { get; set; }
         = new Dictionary<string, float>();
 
-    /// <summary>Recent conversation turns (consent-gated by caller).</summary>
+    /// <summary>Recent turns (ephemeral session + optional consent-gated long-term history).</summary>
     public IReadOnlyList<CompanionConversationTurn> RecentTurns { get; set; }
         = Array.Empty<CompanionConversationTurn>();
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NeuroSync V1 ó Wellbeing Companion</title>
+  <title>NeuroSync V1 ù Wellbeing Companion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -96,8 +96,8 @@
       <h1>NeuroSync</h1>
       <p>Emotion-aware wellbeing companion. Not a diagnostic or therapy product. V1 Safety &amp; Evaluation demo.</p>
       <div class="chiprow">
-        <span class="chip">Mode <strong id="modeChip">ó</strong></span>
-        <span class="chip">Uncertainty <strong id="uncChip">ó</strong></span>
+        <span class="chip">Mode <strong id="modeChip">ù</strong></span>
+        <span class="chip">Uncertainty <strong id="uncChip">ù</strong></span>
         <span class="chip">Safety <strong id="safeChip">Normal</strong></span>
         <span class="chip">Baseline conf. <strong id="baseChip">n/a</strong></span>
       </div>
@@ -108,7 +108,7 @@
         <div id="chat"></div>
         <div id="actionOffer" class="offer"></div>
         <div class="composer">
-          <textarea id="input" placeholder="Say whatís going onÖ (text only for V1)"></textarea>
+          <textarea id="input" placeholder="Say whatùs going onù (text only for V1)"></textarea>
           <button id="send">Send</button>
         </div>
         <p class="note">Facial analysis is experimental and off by default. It never drives safety decisions.</p>
@@ -139,6 +139,14 @@
   <script>
     const userId = localStorage.getItem('ns_uid') || ('u_' + Math.random().toString(36).slice(2, 10));
     localStorage.setItem('ns_uid', userId);
+    const COMPANION_SESSION_KEY = 'ns_companion_session';
+    function getCompanionSessionId() {
+      try { return sessionStorage.getItem(COMPANION_SESSION_KEY); } catch (_) { return null; }
+    }
+    function saveCompanionSessionId(id) {
+      if (!id) return;
+      try { sessionStorage.setItem(COMPANION_SESSION_KEY, id); } catch (_) {}
+    }
     const chat = document.getElementById('chat');
     const api = '';
     apiKey.value = localStorage.getItem('ns_api_key') || '';
@@ -164,10 +172,10 @@
       const insightsEl = document.getElementById('devInsights');
       if (insightsEl) {
         insightsEl.textContent =
-          `Intent ${d.intent || 'ó'} ∑ Mode ${data.mode || d.mode || 'ó'} ∑ Safety ${d.safety || 'ó'} ∑ Signal ${d.primarySignal || 'ó'} ∑ score ${d.modelScore != null ? Math.round(d.modelScore * 100) : 'ó'}% ∑ ${data.uncertainty || d.uncertainty || 'ó'}`;
+          `Intent ${d.intent || 'ù'} ù Mode ${data.mode || d.mode || 'ù'} ù Safety ${d.safety || 'ù'} ù Signal ${d.primarySignal || 'ù'} ù score ${d.modelScore != null ? Math.round(d.modelScore * 100) : 'ù'}% ù ${data.uncertainty || d.uncertainty || 'ù'}`;
       }
-      modeChip.textContent = data.mode || d.mode || 'ó';
-      uncChip.textContent = data.uncertainty || d.uncertainty || 'ó';
+      modeChip.textContent = data.mode || d.mode || 'ù';
+      uncChip.textContent = data.uncertainty || d.uncertainty || 'ù';
       safeChip.textContent = d.safety || 'Normal';
       baseChip.textContent = d.baselineConfidence != null ? Number(d.baselineConfidence).toFixed(2) : 'n/a';
       signals.innerHTML = '';
@@ -180,7 +188,7 @@
       });
     }
 
-    add('ai', "Hey. I'm NeuroSync ó a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
+    add('ai', "Hey. I'm NeuroSync ù a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
 
     async function loadConsent() {
       const r = await fetch(`${api}/api/privacy/consent/${userId}`, { headers: headers() });
@@ -234,11 +242,14 @@
       if (!text) return;
       input.value = '';
       add('user', text);
-      // V1 companion surface ó natural message only in chat
+      // V1 companion surface ù natural message only in chat
+      const sessionId = getCompanionSessionId();
+      const payload = { text, userId };
+      if (sessionId) payload.sessionId = sessionId;
       const r = await fetch(`${api}/api/companion/message`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ text, userId })
+        body: JSON.stringify(payload)
       });
       if (r.status === 401) {
         add('ai', 'API key required in production. Set X-Api-Key in the privacy panel.');
@@ -249,8 +260,9 @@
         add('ai', data.error || 'Something went wrong. Try again.');
         return;
       }
-      // Chat: ONLY companion message ó never emotion label / confidence
-      add('ai', data.message || 'Ö');
+      if (data.sessionId) saveCompanionSessionId(data.sessionId);
+      // Chat: ONLY companion message ù never emotion label / confidence
+      add('ai', data.message || 'ù');
       updateDevInsights(data);
       if (data.actionOffer) {
         actionOffer.style.display = 'block';

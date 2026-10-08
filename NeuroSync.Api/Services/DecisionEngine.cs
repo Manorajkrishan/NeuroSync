@@ -7,6 +7,7 @@ namespace NeuroSync.Api.Services;
 /// Companion DecisionEngine:
 /// Safety → Intent → Emotion(sensor) → Baseline → Mode → Policy → Natural response.
 /// Never exposes emotion labels/confidence as the chat message.
+/// LLM providers never control safety or IoT — this engine remains authoritative.
 /// </summary>
 public class DecisionEngine
 {
@@ -22,6 +23,7 @@ public class DecisionEngine
     private readonly ResponsePolicyService _policy;
     private readonly ICompanionResponseService _responder;
     private readonly EthicalAIFrameworkService? _consent;
+    private readonly EphemeralSessionContextService? _ephemeralSession;
 
     public DecisionEngine(
         IoTDeviceSimulator iotSimulator,
@@ -37,7 +39,8 @@ public class DecisionEngine
         EmotionalBaselineService? baseline = null,
         EthicalAIFrameworkService? consent = null,
         EmotionalIntelligence? emotionalIntelligence = null,
-        ICompanionProvider? companionProvider = null)
+        ICompanionProvider? companionProvider = null,
+        EphemeralSessionContextService? ephemeralSession = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
@@ -51,11 +54,26 @@ public class DecisionEngine
         _companion = companion;
         _baseline = baseline;
         _consent = consent;
-        _ = emotionalIntelligence;
+        _ephemeralSession = ephemeralSession;
+        // companionProvider is optional; CompanionResponseService already holds ICompanionProvider.
         _ = companionProvider;
+        _ = emotionalIntelligence;
     }
 
-    public AdaptiveResponse GenerateResponse(EmotionResult emotionResult, string? userId = "default", string? userMessage = null)
+    public AdaptiveResponse GenerateResponse(
+        EmotionResult emotionResult,
+        string? userId = "default",
+        string? userMessage = null,
+        string? sessionId = null)
+        => GenerateResponseAsync(emotionResult, userId, userMessage, sessionId, cancellationToken: default)
+            .GetAwaiter().GetResult();
+
+    public async Task<AdaptiveResponse> GenerateResponseAsync(
+        EmotionResult emotionResult,
+        string? userId = "default",
+        string? userMessage = null,
+        string? sessionId = null,
+        CancellationToken cancellationToken = default)
     {
         userId ??= "default";
         userMessage ??= emotionResult.OriginalText ?? "";
@@ -70,6 +88,7 @@ public class DecisionEngine
         if (_conversationMemory != null && (memoryAllowed || emotionHistoryAllowed))
             context = _conversationMemory.GetOrCreateContext(userId);
 
+        // SafetyGate is authoritative before companion generation.
         var safety = _safetyGate.Assess(userMessage, context);
 
         var intent = _intents.Detect(userMessage, context, safety.Level);
@@ -110,9 +129,16 @@ public class DecisionEngine
         if (baseline is { HasSufficientData: false })
             baseline.IsSignificantlyDifferent = false;
 
-        var turnCtx = new CompanionTurnContext
+        var emotionSignals = emotionResult.SignalEstimates.Count > 0
+            ? new Dictionary<string, float>(emotionResult.SignalEstimates)
+            : new Dictionary<string, float> { [emotionResult.Emotion.ToString()] = emotionResult.Confidence };
+
+        var recentTurns = BuildRecentTurns(userId, sessionId, context, memoryAllowed);
+        var relevantMemory = memoryAllowed ? BuildRelevantMemory(turn, context) : null;
+
+        var turnCtx = new CompanionContext
         {
-            UserMessage = userMessage,
+            CurrentMessage = userMessage,
             DisplayName = turn?.DisplayName,
             Intent = intent,
             Mode = mode,
@@ -120,11 +146,17 @@ public class DecisionEngine
             Safety = safety,
             Uncertainty = emotionResult.Uncertainty,
             Conversation = context,
-            Baseline = baseline
+            Baseline = baseline,
+            EmotionSignals = emotionSignals,
+            RecentTurns = recentTurns,
+            RelevantMemory = relevantMemory
         };
 
         var policy = _policy.Evaluate(turnCtx);
-        var reply = _responder.Generate(turnCtx, policy);
+        turnCtx.PolicyGuidance = policy.SystemGuidance;
+
+        // Responder → ICompanionProvider (Template or Llm→Template fallback).
+        var reply = await _responder.GenerateAsync(turnCtx, policy, cancellationToken).ConfigureAwait(false);
 
         var offerQuiet = !safety.BlockNormalCompanionFlow
                          && mode is CompanionInteractionMode.Calm or CompanionInteractionMode.Focus
@@ -147,9 +179,7 @@ public class DecisionEngine
             Safety = safety.Level,
             Mode = mode,
             Uncertainty = emotionResult.Uncertainty,
-            EmotionSignals = emotionResult.SignalEstimates.Count > 0
-                ? new Dictionary<string, float>(emotionResult.SignalEstimates)
-                : new Dictionary<string, float> { [emotionResult.Emotion.ToString()] = emotionResult.Confidence },
+            EmotionSignals = emotionSignals,
             BaselineDeviation = baseline is { HasSufficientData: true } ? baseline.Deviation : null,
             BaselineConfidence = baseline?.BaselineConfidence,
             Action = offerQuiet ? "AskQuietMode" : (ShouldTriggerIoT(userMessage) && iotConsent ? "IoTOnRequest" : "None"),
@@ -205,7 +235,80 @@ public class DecisionEngine
         if (_conversationMemory != null && memoryAllowed && !string.IsNullOrEmpty(userMessage))
             _conversationMemory.AddEntry(userId, userMessage, emotionResult, response, null);
 
+        if (_ephemeralSession != null
+            && !string.IsNullOrWhiteSpace(sessionId)
+            && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
+        {
+            _ephemeralSession.AppendTurn(userId, sessionId, userMessage, response.Message);
+        }
+
         return response;
+    }
+
+    private IReadOnlyList<CompanionConversationTurn> BuildRecentTurns(
+        string userId,
+        string? sessionId,
+        ConversationContext? context,
+        bool memoryAllowed)
+    {
+        var turns = new List<CompanionConversationTurn>();
+
+        if (_ephemeralSession != null
+            && !string.IsNullOrWhiteSpace(sessionId)
+            && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
+        {
+            turns.AddRange(_ephemeralSession.GetRecentTurns(userId, sessionId));
+        }
+
+        if (memoryAllowed && context?.History != null && context.History.Count > 0)
+        {
+            foreach (var entry in context.History.TakeLast(4))
+            {
+                if (!string.IsNullOrWhiteSpace(entry.UserMessage))
+                {
+                    turns.Add(new CompanionConversationTurn
+                    {
+                        Role = "user",
+                        Text = entry.UserMessage.Trim(),
+                        Timestamp = entry.Timestamp
+                    });
+                }
+
+                var assistant = entry.Response?.Message;
+                if (!string.IsNullOrWhiteSpace(assistant))
+                {
+                    turns.Add(new CompanionConversationTurn
+                    {
+                        Role = "assistant",
+                        Text = assistant.Trim(),
+                        Timestamp = entry.Timestamp
+                    });
+                }
+            }
+        }
+
+        if (turns.Count == 0)
+            return Array.Empty<CompanionConversationTurn>();
+
+        return turns
+            .OrderBy(t => t.Timestamp)
+            .TakeLast(10)
+            .ToList();
+    }
+
+    private static string? BuildRelevantMemory(CompanionTurn? turn, ConversationContext? context)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(turn?.DisplayName))
+            parts.Add($"preferredName: {turn!.DisplayName}");
+        if (!string.IsNullOrWhiteSpace(turn?.PersonalizedHelp))
+            parts.Add(turn!.PersonalizedHelp!);
+        if (!string.IsNullOrWhiteSpace(context?.CurrentTopic))
+            parts.Add($"topic: {context.CurrentTopic}");
+        if (turn?.SelfThoughts is { Count: > 0 })
+            parts.Add("notes: " + string.Join("; ", turn.SelfThoughts.Take(3)));
+
+        return parts.Count == 0 ? null : string.Join(" | ", parts);
     }
 
     public static bool ShouldTriggerIoT(string? userMessage) =>

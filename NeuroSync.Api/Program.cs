@@ -210,6 +210,9 @@ builder.Services.AddSingleton<IoTDeviceSimulator>();
 // Add Conversation Memory (singleton to maintain state across requests)
 builder.Services.AddSingleton<ConversationMemory>();
 
+// RAM-only session turns (no consent; never persisted)
+builder.Services.AddSingleton<EphemeralSessionContextService>();
+
 // Add Emotional Intelligence
 builder.Services.AddSingleton<EmotionalIntelligence>();
 
@@ -230,8 +233,21 @@ builder.Services.AddSingleton<CompanionModeService>();
 builder.Services.AddSingleton<EmotionalBaselineService>();
 builder.Services.AddSingleton<IntentRouterService>();
 builder.Services.AddSingleton<ResponsePolicyService>();
-builder.Services.AddSingleton<ICompanionResponseService, CompanionResponseService>();
-builder.Services.AddSingleton<ICompanionProvider, TemplateCompanionProvider>();
+builder.Services.AddSingleton<TemplateCompanionProvider>();
+builder.Services.AddSingleton<ICompanionProvider>(sp =>
+{
+    var template = sp.GetRequiredService<TemplateCompanionProvider>();
+    // Always wrap so disabled/missing-key/timeout paths share TemplateCompanionProvider fallback.
+    return new LlmCompanionProvider(
+        template,
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<IConfiguration>(),
+        sp.GetRequiredService<ILogger<LlmCompanionProvider>>());
+});
+builder.Services.AddSingleton<ICompanionResponseService>(sp =>
+    new CompanionResponseService(
+        sp.GetRequiredService<ResponsePolicyService>(),
+        sp.GetRequiredService<ICompanionProvider>()));
 builder.Services.AddSingleton<IEmotionAiClient, MlNetEmotionAiClient>();
 
 // Add Person Memory
@@ -260,11 +276,12 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var baseline = sp.GetService<EmotionalBaselineService>();
     var provider = sp.GetService<ICompanionProvider>();
     var consent = sp.GetService<EthicalAIFrameworkService>();
+    var ephemeralSession = sp.GetService<EphemeralSessionContextService>();
     return new DecisionEngine(
         iotSimulator, realIoTController, logger,
         safetyGate, intents, modes, policy, responder,
         conversationMemory, companion, baseline, consent,
-        emotionalIntelligence, provider);
+        emotionalIntelligence, provider, ephemeralSession);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>

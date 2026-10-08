@@ -58,7 +58,7 @@ public class EmotionController : ControllerBase
             // Self-learning: CollectData ONLY with explicit DataSharingConsent (default OFF)
             TryCollectLearningData(userId, request.Text, emotionResult);
 
-            var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId, request.Text);
+            var adaptiveResponse = await _decisionEngine.GenerateResponseAsync(emotionResult, userId, request.Text);
 
             // IoT consent enforced here (not only in DecisionEngine trace)
             var iotActions = await ResolveIoTActionsAsync(userId, request.Text, emotionResult, adaptiveResponse);
@@ -274,7 +274,7 @@ public class EmotionController : ControllerBase
                 }
                 else
                 {
-                    adaptiveResponse = _decisionEngine.GenerateResponse(emotionResult, userId,
+                    adaptiveResponse = await _decisionEngine.GenerateResponseAsync(emotionResult, userId,
                         $"I look {request.Emotion}. Eye contact feels {request.GazeState}. {request.CueNotes}");
                 }
 
@@ -429,7 +429,7 @@ public class EmotionController : ControllerBase
                 OriginalText = request.Text ?? "Multi-layer emotion detection"
             };
 
-            var adaptiveResponse = _decisionEngine.GenerateResponse(emotionResultForResponse, userId, request.Text);
+            var adaptiveResponse = await _decisionEngine.GenerateResponseAsync(emotionResultForResponse, userId, request.Text);
 
             List<IoTAction> iotActions;
             if (DecisionEngine.ShouldTriggerIoT(request.Text))

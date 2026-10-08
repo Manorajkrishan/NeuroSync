@@ -17,7 +17,7 @@ public class ResponsePolicyService
         public List<string> ViolationsBlocked { get; init; } = new();
     }
 
-    public PolicyResult Evaluate(CompanionTurnContext ctx)
+    public PolicyResult Evaluate(CompanionContext ctx)
     {
         var blocked = new List<string>();
         var allowEmotionClaim = false; // NEVER state inferred emotion as fact in user chat

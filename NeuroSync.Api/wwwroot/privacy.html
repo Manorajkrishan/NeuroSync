@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy — NeuroSync</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg0:#0f1714; --bg1:#1a2a24; --ink:#e8f0ec; --muted:#9bb0a6; --line:rgba(232,240,236,.12); }
+    body {
+      margin:0; color:var(--ink); font-family:"Source Sans 3", system-ui, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(165deg, var(--bg0), var(--bg1));
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 36px 18px 64px; }
+    h1, h2 { font-family: Fraunces, Georgia, serif; font-weight: 500; }
+    h1 { font-size: 2.2rem; margin-bottom: .3rem; }
+    p, li { line-height: 1.5; }
+    .muted { color: var(--muted); }
+    a { color: #8fd0b4; }
+    section { border-top: 1px solid var(--line); padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="/">Back to NeuroSync</a></p>
+    <h1>Privacy and retention</h1>
+    <p class="muted">NeuroSync is a wellbeing companion. It is not therapy, counselling, a medical device, or a diagnosis.</p>
+
+    <section>
+      <h2>What you are asked before an account exists</h2>
+      <p>Creating an account requires two acknowledgements: that NeuroSync is not a clinical service, and that you understand how long data is kept. Memory is off. Sharing conversations for learning is off. You turn those on yourself, later, if you want to.</p>
+    </section>
+
+    <section>
+      <h2>What is stored</h2>
+      <ul>
+        <li><strong>Account.</strong> Email, display name, password hash, and the time you accepted the notice.</li>
+        <li><strong>Consent and preferences.</strong> The switches you set. Defaults are off for memory, emotion history, face analysis, IoT actions, and learning-data sharing.</li>
+        <li><strong>Session context.</strong> The current conversation in this browser tab, tied to your account and a session id. It lives in a short-term cache for about 45 minutes and is not your long-term memory.</li>
+        <li><strong>Long-term memory, history, and baseline.</strong> Written only after you enable the matching consent. Deleting the account removes them.</li>
+        <li><strong>Audit events.</strong> Sign-in, export, consent changes, and deletion. These records do not include your messages, password, or tokens.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>How long it stays</h2>
+      <p>Session context expires after about 45 minutes without needing a request from you. Stored conversation history and memory are removed after the deployment retention window (365 days unless the operator sets a different window) and immediately when you delete your account or your history.</p>
+    </section>
+
+    <section>
+      <h2>Export and deletion</h2>
+      <p>While signed in you can export a JSON copy of the account data NeuroSync holds, delete conversation history and keep the account, or delete the account. Account deletion removes the sign-in, consent, preferences, memory, history, and baseline.</p>
+    </section>
+
+    <section>
+      <h2>What we do not do</h2>
+      <p>The companion does not decide that you have a mental-health condition. API keys for the language model stay on the server. Your browser is not asked to store that key. NeuroSync does not sell personal data. Face analysis cannot run the safety decision, and it stays off unless you enable it.</p>
+    </section>
+
+    <section>
+      <h2>If you might be in danger</h2>
+      <p>NeuroSync can show crisis resources, and it is not a substitute for local emergency services or a person you trust. If you are in the UK, the Samaritans are on 116 123. Elsewhere, use the local emergency number or crisis line.</p>
+    </section>
+
+    <section>
+      <h2>Who operates this copy</h2>
+      <p>This page describes the product behaviour of the deployment you are using. Questions about a specific server go to the person or organisation running that deployment.</p>
+    </section>
+  </main>
+</body>
+</html>

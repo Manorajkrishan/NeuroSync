@@ -1,0 +1,4 @@
+{$SITE_ADDRESS:localhost} {
+	encode gzip
+	reverse_proxy neurosync:8080
+}

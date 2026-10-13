@@ -7,7 +7,7 @@ namespace NeuroSync.Api.Services;
 /// RAM-only conversation context for the current browser session.
 /// No consent required; never persisted to disk or database.
 /// </summary>
-public sealed class EphemeralSessionContextService
+public sealed class EphemeralSessionContextService : IEphemeralSessionContext
 {
     public const int MaxExchanges = 10;
     public static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(45);
@@ -18,25 +18,28 @@ public sealed class EphemeralSessionContextService
 
     public IReadOnlyList<CompanionConversationTurn> GetRecentTurns(string userId, string sessionId)
     {
-        if (!TryMakeKey(userId, sessionId, out var key))
+        if (!TryMakeStorageKey(userId, sessionId, out var key))
             return Array.Empty<CompanionConversationTurn>();
 
         if (!_sessions.TryGetValue(key, out var bucket))
             return Array.Empty<CompanionConversationTurn>();
 
-        if (IsExpired(bucket))
+        lock (bucket.Gate)
         {
-            _sessions.TryRemove(key, out _);
-            return Array.Empty<CompanionConversationTurn>();
-        }
+            if (IsExpired(bucket))
+            {
+                _sessions.TryRemove(new KeyValuePair<string, SessionBucket>(key, bucket));
+                return Array.Empty<CompanionConversationTurn>();
+            }
 
-        bucket.Touch();
-        return Flatten(bucket.Exchanges);
+            bucket.Touch();
+            return Flatten(bucket.Exchanges.ToList());
+        }
     }
 
     public void AppendTurn(string userId, string sessionId, string userMessage, string assistantMessage)
     {
-        if (!TryMakeKey(userId, sessionId, out var key))
+        if (!TryMakeStorageKey(userId, sessionId, out var key))
             return;
 
         var user = (userMessage ?? "").Trim();
@@ -44,36 +47,47 @@ public sealed class EphemeralSessionContextService
         if (user.Length == 0 && assistant.Length == 0)
             return;
 
-        var bucket = _sessions.AddOrUpdate(
-            key,
-            _ => new SessionBucket(),
-            (_, existing) =>
+        var bucket = _sessions.GetOrAdd(key, _ => new SessionBucket());
+        lock (bucket.Gate)
+        {
+            if (IsExpired(bucket))
             {
-                if (IsExpired(existing))
-                    return new SessionBucket();
-                existing.Touch();
-                return existing;
+                bucket.Exchanges.Clear();
+                bucket.Touch();
+            }
+
+            bucket.Touch();
+            bucket.Exchanges.Add(new SessionExchange
+            {
+                UserMessage = user,
+                AssistantMessage = assistant,
+                Timestamp = DateTime.UtcNow
             });
 
-        bucket.Touch();
-        bucket.Exchanges.Add(new SessionExchange
-        {
-            UserMessage = user,
-            AssistantMessage = assistant,
-            Timestamp = DateTime.UtcNow
-        });
-
-        while (bucket.Exchanges.Count > MaxExchanges)
-            bucket.Exchanges.RemoveAt(0);
+            while (bucket.Exchanges.Count > MaxExchanges)
+                bucket.Exchanges.RemoveAt(0);
+        }
     }
 
     public void Clear(string userId, string sessionId)
     {
-        if (TryMakeKey(userId, sessionId, out var key))
+        if (TryMakeStorageKey(userId, sessionId, out var key))
             _sessions.TryRemove(key, out _);
     }
 
-    private static bool TryMakeKey(string userId, string sessionId, out string key)
+    public void ClearUser(string userId)
+    {
+        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+            return;
+        var prefix = safe + ":";
+        foreach (var key in _sessions.Keys)
+        {
+            if (key.StartsWith(prefix, StringComparison.Ordinal))
+                _sessions.TryRemove(key, out _);
+        }
+    }
+
+    public static bool TryMakeStorageKey(string userId, string sessionId, out string key)
     {
         key = "";
         if (!UserIdSanitizer.TryNormalize(userId, out var safeUser))
@@ -121,6 +135,7 @@ public sealed class EphemeralSessionContextService
 
     private sealed class SessionBucket
     {
+        public object Gate { get; } = new();
         public List<SessionExchange> Exchanges { get; } = new();
         public DateTime LastAccessUtc { get; private set; } = DateTime.UtcNow;
 

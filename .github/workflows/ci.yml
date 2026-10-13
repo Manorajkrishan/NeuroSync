@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET
@@ -21,3 +22,5 @@ jobs:
         run: dotnet build NeuroSync.sln --no-restore -c Release
       - name: Test
         run: dotnet test NeuroSync.Api.Tests/NeuroSync.Api.Tests.csproj --no-build -c Release --verbosity normal
+      - name: Dependency vulnerability scan
+        run: dotnet list NeuroSync.sln package --vulnerable --include-transitive

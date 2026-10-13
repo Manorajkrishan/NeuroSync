@@ -1,38 +1,39 @@
-# Deploy NeuroSync V1 (blocker fixes)
+# Deploy NeuroSync
 
-## Local (dev)
+Local demo (sign-in off unless you set `Auth__RequireAuthentication=true`):
 
-```bash
-cd NeuroSync.Api
-# Auth off by default in Development
-dotnet run
+```powershell
+dotnet run --project NeuroSync.Api
 ```
 
-Open `http://localhost:5063/` (V1 companion UI; `/v1.html` remains an alias)
+Open `http://localhost:5063/`.
 
-## Production (Docker)
+Live beta staging:
 
-```bash
-cp .env.example .env
-# set NEUROSYNC_API_KEY and NEUROSYNC_ORIGIN
+```powershell
+copy .env.example .env
+# Set JWT_SIGNING_KEY, POSTGRES_PASSWORD, NEUROSYNC_DB_CONNECTION, BETA_INVITE_CODE, and NEUROSYNC_ORIGIN.
 docker compose up --build
 ```
 
-- Health: `GET /health` (no API key)
-- API: send header `X-Api-Key: <your key>`
-- SignalR: ` /emotionHub?api_key=<your key>`
-- Demo UI: store key in privacy panel → `localStorage.ns_api_key`
+- Browser: `https://localhost` (or the hostname in `SITE_ADDRESS`)
+- Liveness: `GET /health`
+- Readiness: `GET /health/ready`
+- Sign-in is required. A shared `X-Api-Key` is not the account system.
+- LLM key, if you enable the model: `LLM_API_KEY` on the server only
+
+Details: [LIVE_BETA.md](LIVE_BETA.md) and [OPERATIONS.md](OPERATIONS.md).
 
 ## Secrets
 
-- Never commit tokens. `appsettings.json` is gitignored.
-- Use `NeuroSync.Api/appsettings.Example.json` as a template.
-- Rotate any keys that were previously committed to git history.
+Never commit tokens. `appsettings.json` and `.env` are gitignored. Start from `NeuroSync.Api/appsettings.Example.json` and `.env.example`.
+
+Production refuses to start when the JWT signing key is missing or still a placeholder, when CORS origins are empty, when the database is in-memory, or when invite-only mode has no real invite code.
 
 ## CORS
 
-Set `Cors__AllowedOrigins__0=https://your-domain` (Production fails closed if empty).
+Set `Cors__AllowedOrigins__0` to the exact site origin, including `https://`. Production does not allow every origin.
 
 ## Facial analysis
 
-Experimental and **off** by default. Requires `FaceAnalysisConsent`. Never drives SafetyGate.
+Experimental and off by default. It never drives the safety decision.

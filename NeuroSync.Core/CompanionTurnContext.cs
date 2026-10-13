@@ -7,6 +7,9 @@ namespace NeuroSync.Core;
 /// </summary>
 public class CompanionContext
 {
+    /// <summary>Authenticated account id when the caller has one. Never taken from an untrusted client in production.</summary>
+    public string? UserId { get; set; }
+
     /// <summary>Current user message for this turn.</summary>
     public string CurrentMessage { get; set; } = string.Empty;
 

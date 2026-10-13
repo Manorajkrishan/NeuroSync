@@ -15,6 +15,8 @@ public class PrivacyController : ControllerBase
     private readonly UserProfileService _profiles;
     private readonly EmotionalBaselineService _baseline;
     private readonly EthicalAIFrameworkService _consent;
+    private readonly IAccountDataService _accounts;
+    private readonly IAuditLog _audit;
     private readonly ILogger<PrivacyController> _logger;
 
     public PrivacyController(
@@ -22,12 +24,16 @@ public class PrivacyController : ControllerBase
         UserProfileService profiles,
         EmotionalBaselineService baseline,
         EthicalAIFrameworkService consent,
+        IAccountDataService accounts,
+        IAuditLog audit,
         ILogger<PrivacyController> logger)
     {
         _memory = memory;
         _profiles = profiles;
         _baseline = baseline;
         _consent = consent;
+        _accounts = accounts;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -40,11 +46,13 @@ public class PrivacyController : ControllerBase
     }
 
     [HttpPut("consent/{userId}")]
-    public IActionResult SetConsent(string userId, [FromBody] EthicalAIConsent body)
+    public async Task<IActionResult> SetConsent(string userId, [FromBody] EthicalAIConsent body, CancellationToken cancellationToken)
     {
         if (!UserIdSanitizer.TryNormalize(userId, out var safe))
             return BadRequest(new { error = "Invalid userId" });
         _consent.SetConsent(safe, body);
+        await _accounts.SaveConsentAsync(safe, body, cancellationToken);
+        await _audit.WriteAsync("privacy.consent", safe, StatusCodes.Status200OK, cancellationToken);
         return Ok(_consent.GetOrCreateDefault(safe));
     }
 

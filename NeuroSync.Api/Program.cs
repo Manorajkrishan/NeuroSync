@@ -1,13 +1,11 @@
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.ML;
 using Microsoft.Extensions.Configuration;
-using Microsoft.EntityFrameworkCore;
-using NeuroSync.Api.Hubs;
-using NeuroSync.Api.Middleware;
-using NeuroSync.Api.Services;
 using NeuroSync.Api.Data;
+using NeuroSync.Api.Hubs;
+using NeuroSync.Api.Hosting;
+using NeuroSync.Api.Services;
 using NeuroSync.Core;
 using NeuroSync.IoT;
 using NeuroSync.IoT.Configuration;
@@ -21,45 +19,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks()
-    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("NeuroSync V1"));
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy("NeuroSync V1"), tags: new[] { "live" });
 
-// Rate limiting (production-friendly)
-builder.Services.AddRateLimiter(options =>
-{
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(ctx =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: ctx.User.Identity?.Name ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 200,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-    options.OnRejected = async (ctx, _) =>
-    {
-        ctx.HttpContext.Response.StatusCode = 429;
-        await ctx.HttpContext.Response.WriteAsJsonAsync(new { error = "Too many requests. Please try again later." });
-    };
-});
-
-// Add Entity Framework Core (Human OS v2.0 Database)
-// Using InMemory for development - switch to SQL Server for production
-builder.Services.AddDbContext<NeuroSyncDbContext>(options =>
-{
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-    if (!string.IsNullOrEmpty(connectionString))
-    {
-        // Use SQL Server if connection string is provided
-        options.UseSqlServer(connectionString, sqlOptions =>
-        {
-            sqlOptions.MigrationsAssembly("NeuroSync.Api");
-        });
-    }
-    else
-    {
-        // Fallback to InMemory for development
-        options.UseInMemoryDatabase("NeuroSyncHumanOS");
-    }
-});
+builder.AddLiveBeta();
 
 // Configure CORS — locked in Production to Cors:AllowedOrigins
 builder.Services.AddCors(options =>
@@ -210,8 +172,7 @@ builder.Services.AddSingleton<IoTDeviceSimulator>();
 // Add Conversation Memory (singleton to maintain state across requests)
 builder.Services.AddSingleton<ConversationMemory>();
 
-// RAM-only session turns (no consent; never persisted)
-builder.Services.AddSingleton<EphemeralSessionContextService>();
+// Session cache (in-memory or Redis) is registered by AddLiveBeta.
 
 // Add Emotional Intelligence
 builder.Services.AddSingleton<EmotionalIntelligence>();
@@ -242,7 +203,8 @@ builder.Services.AddSingleton<ICompanionProvider>(sp =>
         template,
         sp.GetRequiredService<IHttpClientFactory>(),
         sp.GetRequiredService<IConfiguration>(),
-        sp.GetRequiredService<ILogger<LlmCompanionProvider>>());
+        sp.GetRequiredService<ILogger<LlmCompanionProvider>>(),
+        sp.GetRequiredService<LlmUsageGovernor>());
 });
 builder.Services.AddSingleton<ICompanionResponseService>(sp =>
     new CompanionResponseService(
@@ -276,12 +238,13 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var baseline = sp.GetService<EmotionalBaselineService>();
     var provider = sp.GetService<ICompanionProvider>();
     var consent = sp.GetService<EthicalAIFrameworkService>();
-    var ephemeralSession = sp.GetService<EphemeralSessionContextService>();
+    var ephemeralSession = sp.GetService<IEphemeralSessionContext>();
+    var accounts = sp.GetService<IAccountDataService>();
     return new DecisionEngine(
         iotSimulator, realIoTController, logger,
         safetyGate, intents, modes, policy, responder,
         conversationMemory, companion, baseline, consent,
-        emotionalIntelligence, provider, ephemeralSession);
+        emotionalIntelligence, provider, ephemeralSession, accounts);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>
@@ -289,7 +252,7 @@ builder.Services.AddHostedService<AutoRetrainingService>(sp =>
     var logger = sp.GetRequiredService<ILogger<AutoRetrainingService>>();
     var environment = sp.GetRequiredService<IWebHostEnvironment>();
     var dataCollector = sp.GetRequiredService<RealWorldDataCollector>();
-    return new AutoRetrainingService(logger, sp, environment, dataCollector);
+    return new AutoRetrainingService(logger, sp, environment, dataCollector, sp.GetRequiredService<IConfiguration>());
 });
 
 // Flush real-world data to file on app shutdown
@@ -396,32 +359,11 @@ builder.Services.AddScoped<TrustSafetyLayerService>(sp =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// Only use HTTPS redirection if HTTPS is available
-if (app.Environment.IsDevelopment())
-{
-    // In development, allow HTTP without redirect warning
-    // app.UseHttpsRedirection(); // Commented out to avoid warning when only HTTP is configured
-}
-
-// Global exception handler (no stack trace in production)
-app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
-
-app.UseCors("NeuroSyncCors");
-app.UseMiddleware<ApiKeyAuthMiddleware>();
-app.UseRateLimiter();
-app.UseDefaultFiles();
-app.UseStaticFiles();
-app.UseAuthorization();
+app.UseLiveBeta();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") });
+app.MapHealthChecks("/health/ready");
 app.MapHub<EmotionHub>("/emotionHub");
 app.MapFallbackToFile("index.html");
 

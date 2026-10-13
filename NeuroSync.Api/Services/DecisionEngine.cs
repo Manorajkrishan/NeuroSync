@@ -23,7 +23,8 @@ public class DecisionEngine
     private readonly ResponsePolicyService _policy;
     private readonly ICompanionResponseService _responder;
     private readonly EthicalAIFrameworkService? _consent;
-    private readonly EphemeralSessionContextService? _ephemeralSession;
+    private readonly IEphemeralSessionContext? _ephemeralSession;
+    private readonly IAccountDataService? _accounts;
 
     public DecisionEngine(
         IoTDeviceSimulator iotSimulator,
@@ -40,7 +41,8 @@ public class DecisionEngine
         EthicalAIFrameworkService? consent = null,
         EmotionalIntelligence? emotionalIntelligence = null,
         ICompanionProvider? companionProvider = null,
-        EphemeralSessionContextService? ephemeralSession = null)
+        IEphemeralSessionContext? ephemeralSession = null,
+        IAccountDataService? accounts = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
@@ -55,6 +57,7 @@ public class DecisionEngine
         _baseline = baseline;
         _consent = consent;
         _ephemeralSession = ephemeralSession;
+        _accounts = accounts;
         // companionProvider is optional; CompanionResponseService already holds ICompanionProvider.
         _ = companionProvider;
         _ = emotionalIntelligence;
@@ -138,6 +141,7 @@ public class DecisionEngine
 
         var turnCtx = new CompanionContext
         {
+            UserId = userId,
             CurrentMessage = userMessage,
             DisplayName = turn?.DisplayName,
             Intent = intent,
@@ -240,6 +244,25 @@ public class DecisionEngine
             && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
         {
             _ephemeralSession.AppendTurn(userId, sessionId, userMessage, response.Message);
+        }
+
+        if (_accounts != null && (memoryAllowed || emotionHistoryAllowed))
+        {
+            try
+            {
+                await _accounts.RememberTurnAsync(
+                    userId,
+                    userMessage,
+                    response.Message,
+                    baseline,
+                    persistConversation: memoryAllowed,
+                    persistBaseline: emotionHistoryAllowed && baseline != null,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Durable account write skipped");
+            }
         }
 
         return response;

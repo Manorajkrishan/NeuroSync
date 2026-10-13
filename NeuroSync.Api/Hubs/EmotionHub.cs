@@ -8,23 +8,55 @@ namespace NeuroSync.Api.Hubs;
 /// </summary>
 public class EmotionHub : Hub
 {
+    private readonly IConfiguration _config;
+    private readonly IHostEnvironment _env;
+
+    public EmotionHub(IConfiguration config, IHostEnvironment env)
+    {
+        _config = config;
+        _env = env;
+    }
+
     /// <summary>
     /// Client must call this after connect so EmotionDetected / AdaptiveResponse / IoTAction
     /// only reach that user's connections.
     /// </summary>
     public async Task JoinUserGroup(string userId)
     {
-        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
-            throw new HubException("Invalid userId");
-
+        var safe = ResolveUser(userId);
         await Groups.AddToGroupAsync(Context.ConnectionId, EmotionHubUserScope.GroupName(safe));
         await Clients.Caller.SendAsync("JoinedUserGroup", EmotionHubUserScope.GroupName(safe));
     }
 
+    private string ResolveUser(string requested)
+    {
+        var require = NeuroSync.Api.Auth.AuthPolicy.RequireAuthentication(_config, _env);
+        var claim = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!require)
+        {
+            if (!UserIdSanitizer.TryNormalize(requested, out var safe))
+                throw new HubException("Invalid userId");
+            return safe;
+        }
+
+        if (string.IsNullOrEmpty(claim))
+            throw new HubException("Sign in required.");
+        if (!string.IsNullOrWhiteSpace(requested) && !string.Equals(requested, claim, StringComparison.Ordinal))
+            throw new HubException("userId does not match the signed-in account.");
+        return claim;
+    }
+
     public async Task LeaveUserGroup(string userId)
     {
-        if (!UserIdSanitizer.TryNormalize(userId, out var safe))
+        string safe;
+        try
+        {
+            safe = ResolveUser(userId);
+        }
+        catch (HubException)
+        {
             return;
+        }
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, EmotionHubUserScope.GroupName(safe));
     }

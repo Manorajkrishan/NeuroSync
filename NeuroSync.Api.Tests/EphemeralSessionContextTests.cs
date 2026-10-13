@@ -30,6 +30,17 @@ public class EphemeralSessionContextTests
     }
 
     [Fact]
+    public void AppendTurn_ConcurrentWriters_KeepAConsistentBucket()
+    {
+        Parallel.For(0, 40, i => _sessions.AppendTurn("user_lock", "sess_lock", "turn " + i, "reply " + i));
+
+        var turns = _sessions.GetRecentTurns("user_lock", "sess_lock");
+        turns.Should().NotBeEmpty();
+        turns.Count.Should().BeLessOrEqualTo(20);
+        turns.Should().OnlyContain(t => t.Text.StartsWith("turn ") || t.Text.StartsWith("reply "));
+    }
+
+    [Fact]
     public void GetRecentTurns_UnknownSession_ReturnsEmpty()
     {
         _sessions.GetRecentTurns("user_a", "missing_session").Should().BeEmpty();

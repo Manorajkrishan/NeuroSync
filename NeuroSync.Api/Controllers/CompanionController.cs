@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using NeuroSync.Api.Hubs;
 using NeuroSync.Api.Services;
@@ -10,6 +12,7 @@ namespace NeuroSync.Api.Controllers;
 /// Thin V1 companion surface — natural message is the product; emotion stays in developerInsights.
 /// </summary>
 [ApiController]
+[EnableRateLimiting("companion")]
 [Route("api/companion")]
 public class CompanionController : ControllerBase
 {
@@ -18,26 +21,33 @@ public class CompanionController : ControllerBase
     private readonly IHubContext<EmotionHub> _hubContext;
     private readonly EthicalAIFrameworkService _consent;
     private readonly ILogger<CompanionController> _logger;
+    private readonly LiveBetaMetrics _metrics;
 
     public CompanionController(
         EmotionDetectionService emotionDetection,
         DecisionEngine decisionEngine,
         IHubContext<EmotionHub> hubContext,
         EthicalAIFrameworkService consent,
-        ILogger<CompanionController> logger)
+        ILogger<CompanionController> logger,
+        LiveBetaMetrics metrics)
     {
         _emotionDetection = emotionDetection;
         _decisionEngine = decisionEngine;
         _hubContext = hubContext;
         _consent = consent;
         _logger = logger;
+        _metrics = metrics;
     }
 
     [HttpPost("message")]
+    [RequestSizeLimit(32 * 1024)]
     public async Task<IActionResult> Message([FromBody] CompanionMessageRequest request)
     {
         if (string.IsNullOrWhiteSpace(request?.Text))
             return BadRequest(new { error = "Text is required" });
+        if (request.Text.Length > 4000)
+            return BadRequest(new { error = "Message is too long." });
+        var started = Stopwatch.StartNew();
 
         if (!UserIdSanitizer.TryNormalize(request.UserId, out var userId))
             return BadRequest(new { error = "Invalid userId (use letters, digits, _ or - only, max 64)" });
@@ -85,6 +95,7 @@ public class CompanionController : ControllerBase
             if (actionOffer == null && p.TryGetValue("iotBlocked", out var blocked))
                 actionOffer = blocked;
 
+            _metrics.CompanionTurn(started.ElapsedMilliseconds);
             return Ok(new
             {
                 message = adaptive.Message,

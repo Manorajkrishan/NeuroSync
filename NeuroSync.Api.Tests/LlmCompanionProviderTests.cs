@@ -117,6 +117,66 @@ public class LlmCompanionProviderTests
         reply.ProviderId.Should().Be(template.ProviderId);
     }
 
+    [Fact]
+    public async Task GenerateAsync_WhenDailyBudgetIsExhausted_FallsBackWithoutCallingProvider()
+    {
+        var called = false;
+        var template = new TemplateCompanionProvider();
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Companion:Llm:Enabled"] = "true",
+                ["Companion:Llm:ApiKey"] = "sk-test",
+                ["Companion:Llm:DailyCostLimitUsd"] = "0",
+                ["Companion:Llm:RetryCount"] = "0"
+            })
+            .Build();
+        var governor = new LlmUsageGovernor(config, Mock.Of<ILogger<LlmUsageGovernor>>(), new LiveBetaMetrics());
+        var factory = new Mock<IHttpClientFactory>();
+        factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() =>
+        {
+            called = true;
+            return new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
+        });
+        var provider = new LlmCompanionProvider(template, factory.Object, config, Mock.Of<ILogger<LlmCompanionProvider>>(), governor);
+
+        var reply = await provider.GenerateAsync(SampleContext(UserIntent.Greeting, "hi"));
+
+        called.Should().BeFalse();
+        reply.ProviderId.Should().Be(template.ProviderId);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RetriesTransientFailure_ThenUsesModelText()
+    {
+        var attempts = 0;
+        var template = new TemplateCompanionProvider();
+        var provider = CreateProvider(
+            template,
+            enabled: true,
+            apiKey: "sk-test",
+            retryCount: 1,
+            handler: new StubHandler(_ =>
+            {
+                attempts++;
+                if (attempts == 1)
+                    return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        """{"choices":[{"message":{"content":"Recovered."}}],"usage":{"prompt_tokens":12,"completion_tokens":4}}""",
+                        Encoding.UTF8,
+                        "application/json")
+                };
+            }));
+
+        var reply = await provider.GenerateAsync(SampleContext(UserIntent.CasualConversation, "hello again"));
+
+        attempts.Should().Be(2);
+        reply.ProviderId.Should().Be("llm-v1");
+        reply.Message.Should().Be("Recovered.");
+    }
+
     private static CompanionContext SampleContext(UserIntent intent, string message) =>
         new()
         {
@@ -133,7 +193,8 @@ public class LlmCompanionProviderTests
         TemplateCompanionProvider template,
         bool enabled,
         string apiKey = "sk-test",
-        HttpMessageHandler? handler = null)
+        HttpMessageHandler? handler = null,
+        int retryCount = 0)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -142,7 +203,8 @@ public class LlmCompanionProviderTests
                 ["Companion:Llm:ApiKey"] = apiKey,
                 ["Companion:Llm:BaseUrl"] = "https://example.test/v1",
                 ["Companion:Llm:Model"] = "gpt-test",
-                ["Companion:Llm:TimeoutSeconds"] = "5"
+                ["Companion:Llm:TimeoutSeconds"] = "5",
+                ["Companion:Llm:RetryCount"] = retryCount.ToString()
             })
             .Build();
 

@@ -1,17 +1,91 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: neurosync
+      POSTGRES_USER: neurosync
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - neurosync-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neurosync -d neurosync"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - neurosync-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   neurosync:
     build: .
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      Auth__RequireApiKey: "true"
-      Auth__ApiKey: ${NEUROSYNC_API_KEY:-change-me-before-deploy}
-      Cors__AllowedOrigins__0: ${NEUROSYNC_ORIGIN:-http://localhost:8080}
+      Database__Provider: Postgres
+      Database__ApplyMigrations: "true"
+      Database__RetentionDays: "365"
+      ConnectionStrings__DefaultConnection: ${NEUROSYNC_DB_CONNECTION}
+      Redis__ConnectionString: redis:6379
+      Auth__RequireAuthentication: "true"
+      Auth__RequireApiKey: "false"
+      Auth__Jwt__SigningKey: ${JWT_SIGNING_KEY}
+      Auth__Jwt__Issuer: NeuroSync
+      Auth__Jwt__Audience: NeuroSync
+      Cors__AllowedOrigins__0: ${NEUROSYNC_ORIGIN:-https://localhost}
+      Https__Redirect: "false"
+      Https__Hsts: "true"
+      Https__TrustProxy: "true"
+      Beta__InviteOnly: ${BETA_INVITE_ONLY:-true}
+      Beta__InviteCodes__0: ${BETA_INVITE_CODE:-}
+      Companion__Llm__Enabled: ${LLM_ENABLED:-false}
+      Companion__Llm__ApiKey: ${LLM_API_KEY:-}
+      Companion__Llm__BaseUrl: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      Companion__Llm__Model: ${LLM_MODEL:-gpt-4o-mini}
+      Companion__Llm__TimeoutSeconds: "12"
+      Companion__Llm__MaxTokens: "280"
+      Companion__Llm__RetryCount: "2"
+      Companion__Llm__DailyCostLimitUsd: "5"
+      Companion__Llm__PerUserDailyRequests: "200"
+      Learning__AutoRetrain: "false"
+      Ops__MetricsKey: ${METRICS_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 40s
+
+  edge:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - neurosync
+
+volumes:
+  neurosync-db:
+  neurosync-redis:
+  caddy-data:
+  caddy-config:

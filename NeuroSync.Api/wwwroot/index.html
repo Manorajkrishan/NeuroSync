@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NeuroSync V1 ù Wellbeing Companion</title>
+  <title>NeuroSync - Wellbeing Companion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
@@ -16,8 +16,10 @@
       --accent: #3d9b7a;
       --warn: #c4a35a;
       --line: rgba(232,240,236,.12);
+      --danger: #d37a6a;
     }
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
       margin: 0; min-height: 100vh; color: var(--ink);
       font-family: "Source Sans 3", system-ui, sans-serif;
@@ -26,15 +28,12 @@
         radial-gradient(900px 500px at 100% 0%, #1e2f40 0%, transparent 50%),
         linear-gradient(165deg, var(--bg0), var(--bg1));
     }
-    .shell {
-      max-width: 920px; margin: 0 auto; padding: 28px 18px 40px;
-      display: grid; gap: 16px;
-    }
+    .shell { max-width: 920px; margin: 0 auto; padding: 28px 18px 48px; display: grid; gap: 16px; }
     header h1 {
       font-family: Fraunces, Georgia, serif; font-weight: 700;
       font-size: clamp(1.8rem, 4vw, 2.6rem); margin: 0 0 6px;
     }
-    header p { margin: 0; color: var(--muted); max-width: 42rem; }
+    header p, .lede { margin: 0; color: var(--muted); max-width: 42rem; }
     .chiprow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .chip {
       border: 1px solid var(--line); border-radius: 999px;
@@ -42,9 +41,7 @@
       background: rgba(255,255,255,.03);
     }
     .chip strong { color: var(--ink); font-weight: 600; }
-    .layout {
-      display: grid; grid-template-columns: 1.4fr .8fr; gap: 14px;
-    }
+    .layout { display: grid; grid-template-columns: 1.4fr .8fr; gap: 14px; }
     @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
     .panel {
       border: 1px solid var(--line); border-radius: 18px;
@@ -55,78 +52,118 @@
       height: min(58vh, 520px); overflow: auto; display: flex;
       flex-direction: column; gap: 10px; padding: 6px;
     }
-    .bubble {
-      max-width: 85%; padding: 10px 12px; border-radius: 14px;
-      line-height: 1.45; white-space: pre-wrap;
-    }
+    .bubble { max-width: 85%; padding: 10px 12px; border-radius: 14px; line-height: 1.45; white-space: pre-wrap; }
     .user { align-self: flex-end; background: #2a4a3d; }
     .ai { align-self: flex-start; background: rgba(255,255,255,.06); border: 1px solid var(--line); }
-    .meta { font-size: .75rem; color: var(--muted); margin-top: 4px; }
     .composer { display: flex; gap: 8px; margin-top: 10px; }
-    .composer textarea {
-      flex: 1; resize: none; min-height: 52px; border-radius: 12px;
-      border: 1px solid var(--line); background: rgba(0,0,0,.25);
-      color: var(--ink); padding: 10px 12px; font: inherit;
+    .composer textarea, input[type="email"], input[type="password"], input[type="text"] {
+      width: 100%; border-radius: 12px; border: 1px solid var(--line);
+      background: rgba(0,0,0,.25); color: var(--ink); padding: 10px 12px; font: inherit;
     }
+    .composer textarea { flex: 1; resize: none; min-height: 52px; }
     button {
       border: 0; border-radius: 12px; background: var(--accent);
-      color: #04110c; font-weight: 600; padding: 0 16px; cursor: pointer;
+      color: #04110c; font-weight: 600; padding: 12px 16px; cursor: pointer;
     }
     button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.danger { background: transparent; color: var(--danger); border: 1px solid rgba(211,122,106,.45); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
     .side h3 { margin: 0 0 8px; font-family: Fraunces, serif; font-size: 1.05rem; }
-    .side label { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .92rem; }
-    .note { color: var(--muted); font-size: .8rem; margin-top: 10px; }
+    .side label, .check {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .92rem; align-items: center;
+    }
+    .check { justify-content: flex-start; align-items: flex-start; border-bottom: 0; }
+    .check input { margin-top: 0.3rem; flex: 0 0 auto; }
+    .check span { line-height: 1.35; }
+    .note { color: var(--muted); font-size: .8rem; margin: 10px 0 0; }
     .offer {
       display: none; margin-top: 10px; padding: 10px 12px; border-radius: 12px;
       border: 1px dashed var(--warn); color: #f0e2b8;
     }
     .signals { display: flex; flex-wrap: wrap; gap: 6px; }
     .sig { font-size: .78rem; padding: 4px 8px; border-radius: 8px; background: rgba(61,155,122,.15); }
-    details.dev {
-      margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px;
+    details.dev { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+    details.dev summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+    .gate {
+      min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
     }
-    details.dev summary {
-      cursor: pointer; color: var(--muted); font-size: .85rem; user-select: none;
-    }
+    .card { width: min(460px, 100%); display: grid; gap: 12px; }
+    .card h1 { font-family: Fraunces, Georgia, serif; margin: 0; font-size: 2.2rem; }
+    .tabs { display: flex; gap: 8px; }
+    .tabs button { flex: 1; }
+    .tabs button[aria-selected="false"] { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    .error { color: #f0c2ba; font-size: .9rem; min-height: 1.2em; }
+    .who { font-size: .85rem; color: var(--muted); }
+    a { color: #8fd0b4; }
   </style>
 </head>
 <body>
-  <div class="shell">
+  <section id="gate" class="gate">
+    <form id="authForm" class="panel card">
+      <div>
+        <h1>NeuroSync</h1>
+        <p class="lede">A wellbeing companion for everyday conversation. Not therapy, not a diagnosis, and not a crisis service.</p>
+      </div>
+      <div class="tabs">
+        <button type="button" id="tabRegister" aria-selected="true">Create account</button>
+        <button type="button" id="tabLogin" aria-selected="false">Sign in</button>
+      </div>
+      <label>Email<input id="email" type="email" autocomplete="email" required /></label>
+      <label>Password<input id="password" type="password" autocomplete="new-password" required minlength="10" /></label>
+      <label id="nameRow">Name<input id="displayName" type="text" autocomplete="nickname" maxlength="40" /></label>
+      <label id="inviteRow" hidden>Invite code<input id="inviteCode" type="text" autocomplete="off" /></label>
+      <label class="check" id="noticeRow"><input id="acceptNotice" type="checkbox" /> <span>I understand NeuroSync is not therapy or a diagnosis.</span></label>
+      <label class="check" id="retentionRow"><input id="acceptRetention" type="checkbox" /> <span>I understand session context lasts about 45 minutes, long-term memory stays off until I turn it on, and I can export or delete my account.</span></label>
+      <p class="note">Memory and learning-data sharing stay off. Nothing here is a medical record. <a href="/privacy.html">Privacy and retention</a></p>
+      <p id="authError" class="error" role="alert"></p>
+      <button type="submit" id="authSubmit">Create account</button>
+    </form>
+  </section>
+
+  <div id="app" class="shell" hidden>
     <header>
       <h1>NeuroSync</h1>
-      <p>Emotion-aware wellbeing companion. Not a diagnostic or therapy product. V1 Safety &amp; Evaluation demo.</p>
+      <p>Emotion-aware wellbeing companion. Not a diagnostic or therapy product.</p>
       <div class="chiprow">
-        <span class="chip">Mode <strong id="modeChip">ù</strong></span>
-        <span class="chip">Uncertainty <strong id="uncChip">ù</strong></span>
+        <span class="chip">Signed in <strong id="whoChip">-</strong></span>
+        <span class="chip">Mode <strong id="modeChip">-</strong></span>
+        <span class="chip">Uncertainty <strong id="uncChip">-</strong></span>
         <span class="chip">Safety <strong id="safeChip">Normal</strong></span>
         <span class="chip">Baseline conf. <strong id="baseChip">n/a</strong></span>
       </div>
     </header>
+    <p id="demoBanner" class="note" hidden>This server is running without sign-in. Do not use it for real personal data.</p>
 
     <div class="layout">
       <section class="panel">
         <div id="chat"></div>
         <div id="actionOffer" class="offer"></div>
         <div class="composer">
-          <textarea id="input" placeholder="Say whatùs going onù (text only for V1)"></textarea>
-          <button id="send">Send</button>
+          <textarea id="input" placeholder="Say what's going on (text only for this beta)"></textarea>
+          <button id="send" type="button">Send</button>
         </div>
-        <p class="note">Facial analysis is experimental and off by default. It never drives safety decisions.</p>
+        <p class="note">This tab keeps a temporary session for about 45 minutes. It is not long-term memory. Facial analysis is experimental and off.</p>
       </section>
 
       <aside class="panel side">
         <h3>Privacy controls</h3>
-        <label><span>API key (prod)</span><input type="password" id="apiKey" placeholder="X-Api-Key" style="max-width:140px;background:#0b1210;color:#e8f0ec;border:1px solid var(--line);border-radius:8px;padding:4px 8px;" /></label>
+        <p class="who" id="accountLine"></p>
+        <label id="apiKeyRow"><span>API key</span><input type="password" id="apiKey" autocomplete="off" style="max-width:140px" /></label>
         <label><span>Memory</span><input type="checkbox" id="cMemory" /></label>
         <label><span>Emotion history</span><input type="checkbox" id="cHistory" /></label>
         <label><span>Face analysis (experimental)</span><input type="checkbox" id="cFace" /></label>
         <label><span>IoT / Quiet Mode actions</span><input type="checkbox" id="cIoT" /></label>
         <label><span>Learning data sharing</span><input type="checkbox" id="cShare" /></label>
-        <div style="display:flex; gap:8px; margin-top:12px;">
-          <button class="secondary" id="saveConsent">Save consent</button>
-          <button class="secondary" id="exportBtn">Export</button>
+        <p class="note" id="retentionNote">Stored account data is kept until you delete it, or for the retention window, whichever you choose first. Session cache expires on its own.</p>
+        <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
+          <button class="secondary" id="saveConsent" type="button">Save consent</button>
+          <button class="secondary" id="exportBtn" type="button">Export</button>
+          <button class="secondary" id="signOutBtn" type="button">Sign out</button>
         </div>
-        <button class="secondary" id="deleteBtn" style="width:100%; margin-top:8px;">Delete history permanently</button>
+        <button class="secondary" id="deleteBtn" type="button" style="width:100%; margin-top:8px;">Delete history</button>
+        <button class="danger" id="deleteAccountBtn" type="button" style="width:100%; margin-top:8px;">Delete account</button>
+        <p class="note"><a href="/privacy.html">Privacy policy and data retention</a></p>
 
         <details class="dev" id="devPanel">
           <summary>Developer / Explainability</summary>
@@ -137,8 +174,13 @@
     </div>
   </div>
   <script>
-    const userId = localStorage.getItem('ns_uid') || ('u_' + Math.random().toString(36).slice(2, 10));
-    localStorage.setItem('ns_uid', userId);
+    let accessToken = null;
+    let userId = null;
+    let authRequired = true;
+    let requireApiKey = false;
+    let inviteOnly = false;
+    let mode = 'register';
+
     const COMPANION_SESSION_KEY = 'ns_companion_session';
     function getCompanionSessionId() {
       try { return sessionStorage.getItem(COMPANION_SESSION_KEY); } catch (_) { return null; }
@@ -147,15 +189,31 @@
       if (!id) return;
       try { sessionStorage.setItem(COMPANION_SESSION_KEY, id); } catch (_) {}
     }
+
     const chat = document.getElementById('chat');
-    const api = '';
+    const gate = document.getElementById('gate');
+    const app = document.getElementById('app');
+    const apiKey = document.getElementById('apiKey');
     apiKey.value = localStorage.getItem('ns_api_key') || '';
     apiKey.onchange = () => localStorage.setItem('ns_api_key', apiKey.value.trim());
 
-    function headers() {
-      const h = { 'Content-Type': 'application/json' };
+    function currentUserId() {
+      if (userId) return userId;
+      if (authRequired) return null;
+      let id = localStorage.getItem('ns_uid');
+      if (!id) {
+        id = 'u_' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('ns_uid', id);
+      }
+      return id;
+    }
+
+    function headers(json) {
+      const h = {};
+      if (json) h['Content-Type'] = 'application/json';
       const k = localStorage.getItem('ns_api_key') || apiKey.value.trim();
       if (k) h['X-Api-Key'] = k;
+      if (accessToken) h['Authorization'] = 'Bearer ' + accessToken;
       return h;
     }
 
@@ -172,10 +230,11 @@
       const insightsEl = document.getElementById('devInsights');
       if (insightsEl) {
         insightsEl.textContent =
-          `Intent ${d.intent || 'ù'} ù Mode ${data.mode || d.mode || 'ù'} ù Safety ${d.safety || 'ù'} ù Signal ${d.primarySignal || 'ù'} ù score ${d.modelScore != null ? Math.round(d.modelScore * 100) : 'ù'}% ù ${data.uncertainty || d.uncertainty || 'ù'}`;
+          'Intent ' + (d.intent || '-') + ' | Mode ' + (data.mode || d.mode || '-') +
+          ' | Safety ' + (d.safety || '-') + ' | Signal ' + (d.primarySignal || '-');
       }
-      modeChip.textContent = data.mode || d.mode || 'ù';
-      uncChip.textContent = data.uncertainty || d.uncertainty || 'ù';
+      modeChip.textContent = data.mode || d.mode || '-';
+      uncChip.textContent = data.uncertainty || d.uncertainty || '-';
       safeChip.textContent = d.safety || 'Normal';
       baseChip.textContent = d.baselineConfidence != null ? Number(d.baselineConfidence).toFixed(2) : 'n/a';
       signals.innerHTML = '';
@@ -183,15 +242,46 @@
       Object.entries(sigs).slice(0, 6).forEach(([k, v]) => {
         const s = document.createElement('span');
         s.className = 'sig';
-        s.textContent = `${k} ${Number(v).toFixed(2)}`;
+        s.textContent = k + ' ' + Number(v).toFixed(2);
         signals.appendChild(s);
       });
     }
 
-    add('ai', "Hey. I'm NeuroSync ù a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
+    function showApp(session) {
+      gate.hidden = true;
+      app.hidden = false;
+      if (session) {
+        userId = session.id;
+        whoChip.textContent = session.displayName || session.email || 'you';
+        accountLine.textContent = session.email || '';
+        demoBanner.hidden = true;
+        deleteAccountBtn.hidden = false;
+        signOutBtn.hidden = false;
+      } else {
+        userId = currentUserId();
+        whoChip.textContent = 'local demo';
+        demoBanner.hidden = false;
+        deleteAccountBtn.hidden = true;
+        signOutBtn.hidden = true;
+      }
+      apiKeyRow.hidden = !requireApiKey;
+      add('ai', "Hey. I'm NeuroSync, a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
+      loadConsent().catch(() => {});
+    }
+
+    async function refreshSession() {
+      const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      accessToken = data.accessToken;
+      return data.user;
+    }
 
     async function loadConsent() {
-      const r = await fetch(`${api}/api/privacy/consent/${userId}`, { headers: headers() });
+      const id = currentUserId();
+      if (!id) return;
+      const r = await fetch('/api/privacy/consent/' + encodeURIComponent(id), { headers: headers(false), credentials: 'include' });
+      if (r.status === 401) return;
       const c = await r.json();
       cMemory.checked = !!c.memoryConsent;
       cHistory.checked = !!c.emotionHistoryConsent;
@@ -200,69 +290,161 @@
       cShare.checked = !!c.dataSharingConsent;
     }
 
+    function setMode(next) {
+      mode = next;
+      const registering = next === 'register';
+      tabRegister.setAttribute('aria-selected', registering ? 'true' : 'false');
+      tabLogin.setAttribute('aria-selected', registering ? 'false' : 'true');
+      nameRow.hidden = !registering;
+      noticeRow.hidden = !registering;
+      retentionRow.hidden = !registering;
+      inviteRow.hidden = !registering || !inviteOnly;
+      authSubmit.textContent = registering ? 'Create account' : 'Sign in';
+      password.autocomplete = registering ? 'new-password' : 'current-password';
+      authError.textContent = '';
+    }
+
+    tabRegister.onclick = () => setMode('register');
+    tabLogin.onclick = () => setMode('login');
+
+    authForm.onsubmit = async (event) => {
+      event.preventDefault();
+      authError.textContent = '';
+      authSubmit.disabled = true;
+      try {
+        const registering = mode === 'register';
+        const body = { email: email.value.trim(), password: password.value };
+        if (registering) {
+          body.displayName = displayName.value.trim();
+          body.inviteCode = inviteCode.value.trim();
+          body.acceptWellbeingNotice = acceptNotice.checked;
+          body.acknowledgeRetention = acceptRetention.checked;
+        }
+        const res = await fetch(registering ? '/api/auth/register' : '/api/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          authError.textContent = data.error || 'Could not sign you in.';
+          return;
+        }
+        accessToken = data.accessToken;
+        chat.innerHTML = '';
+        showApp(data.user);
+      } finally {
+        authSubmit.disabled = false;
+      }
+    };
+
     saveConsent.onclick = async () => {
+      const id = currentUserId();
+      if (!id) return;
       localStorage.setItem('ns_api_key', apiKey.value.trim());
-      await fetch(`${api}/api/privacy/consent/${userId}`, {
+      const res = await fetch('/api/privacy/consent/' + encodeURIComponent(id), {
         method: 'PUT',
-        headers: headers(),
+        credentials: 'include',
+        headers: headers(true),
         body: JSON.stringify({
-          userId,
+          userId: id,
           emotionSensingConsent: true,
           memoryConsent: cMemory.checked,
           emotionHistoryConsent: cHistory.checked,
           faceAnalysisConsent: cFace.checked,
           ioTConsent: cIoT.checked,
-          iotConsent: cIoT.checked,
-          dataStorageConsent: cMemory.checked,
+          dataStorageConsent: cMemory.checked || cHistory.checked,
           dataSharingConsent: cShare.checked,
           anonymizationEnabled: true
         })
       });
-      add('ai', 'Consent saved. Sensitive collection stays off unless you enable it.');
+      if (res.ok) add('ai', 'Consent saved. Memory and learning-data sharing stay off unless you enabled them.');
+      else add('ai', 'Consent could not be saved.');
     };
 
     exportBtn.onclick = async () => {
-      const r = await fetch(`${api}/api/privacy/export/${userId}`, { headers: headers() });
+      const id = currentUserId();
+      const path = accessToken ? '/api/account/export' : '/api/privacy/export/' + encodeURIComponent(id);
+      const r = await fetch(path, { headers: headers(false), credentials: 'include' });
+      if (!r.ok) { add('ai', 'Export failed.'); return; }
       const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `neurosync-export-${userId}.json`;
+      a.download = 'neurosync-export.json';
       a.click();
     };
 
     deleteBtn.onclick = async () => {
-      if (!confirm('Delete NeuroSync history permanently for this device user id?')) return;
-      await fetch(`${api}/api/privacy/memory/${userId}`, { method: 'DELETE', headers: headers() });
+      const id = currentUserId();
+      if (!id) return;
+      if (!confirm('Delete conversation history for this account? Your sign-in stays.')) return;
+      await fetch('/api/privacy/memory/' + encodeURIComponent(id), { method: 'DELETE', headers: headers(false), credentials: 'include' });
       add('ai', 'History deleted. You can keep chatting with memory off.');
       loadConsent();
     };
 
-    async function send() {
+    deleteAccountBtn.onclick = async () => {
+      if (!accessToken) return;
+      const typed = prompt('This permanently deletes the account, consent, memory, history, and baseline. Type DELETE to confirm.');
+      if (typed !== 'DELETE') return;
+      const res = await fetch('/api/account', { method: 'DELETE', headers: headers(false), credentials: 'include' });
+      if (!res.ok) { add('ai', 'Account deletion failed.'); return; }
+      accessToken = null;
+      userId = null;
+      chat.innerHTML = '';
+      app.hidden = true;
+      gate.hidden = false;
+      authError.textContent = 'Account deleted.';
+    };
+
+    signOutBtn.onclick = async () => {
+      await fetch('/api/auth/logout', { method: 'POST', headers: headers(false), credentials: 'include' });
+      accessToken = null;
+      userId = null;
+      chat.innerHTML = '';
+      app.hidden = true;
+      gate.hidden = false;
+    };
+
+    async function sendMessage() {
       const text = input.value.trim();
-      if (!text) return;
+      const id = currentUserId();
+      if (!text || !id) return;
       input.value = '';
       add('user', text);
-      // V1 companion surface ù natural message only in chat
       const sessionId = getCompanionSessionId();
-      const payload = { text, userId };
+      const payload = { text, userId: id };
       if (sessionId) payload.sessionId = sessionId;
-      const r = await fetch(`${api}/api/companion/message`, {
+      let r = await fetch('/api/companion/message', {
         method: 'POST',
-        headers: headers(),
+        credentials: 'include',
+        headers: headers(true),
         body: JSON.stringify(payload)
       });
+      if (r.status === 401 && authRequired) {
+        const session = await refreshSession();
+        if (session) {
+          userId = session.id;
+          r = await fetch('/api/companion/message', {
+            method: 'POST',
+            credentials: 'include',
+            headers: headers(true),
+            body: JSON.stringify(payload)
+          });
+        }
+      }
       if (r.status === 401) {
-        add('ai', 'API key required in production. Set X-Api-Key in the privacy panel.');
+        add('ai', authRequired ? 'Sign in again to continue.' : 'The server refused this request.');
         return;
       }
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         add('ai', data.error || 'Something went wrong. Try again.');
         return;
       }
       if (data.sessionId) saveCompanionSessionId(data.sessionId);
-      // Chat: ONLY companion message ù never emotion label / confidence
-      add('ai', data.message || 'ù');
+      add('ai', data.message || '...');
       updateDevInsights(data);
       if (data.actionOffer) {
         actionOffer.style.display = 'block';
@@ -272,11 +454,32 @@
       }
     }
 
-    send.onclick = send;
+    document.getElementById('send').onclick = sendMessage;
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-    loadConsent().catch(() => {});
+
+    async function boot() {
+      let config = { requireAuthentication: true, requireApiKey: false, inviteOnly: false, retentionDays: 365 };
+      try {
+        const res = await fetch('/api/auth/config');
+        if (res.ok) config = await res.json();
+      } catch (_) {}
+      authRequired = !!config.requireAuthentication;
+      requireApiKey = !!config.requireApiKey;
+      inviteOnly = !!config.inviteOnly;
+      retentionNote.textContent = 'Session context expires after about ' + (config.sessionTtlMinutes || 45) +
+        ' minutes. Stored account data is kept up to ' + (config.retentionDays || 365) +
+        ' days, or until you delete the account. Memory and learning-data sharing start off.';
+      setMode('register');
+      if (!authRequired) {
+        showApp(null);
+        return;
+      }
+      const session = await refreshSession().catch(() => null);
+      if (session) showApp(session);
+    }
+    boot();
   </script>
 </body>
 </html>

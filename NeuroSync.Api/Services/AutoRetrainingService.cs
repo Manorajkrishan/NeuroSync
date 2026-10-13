@@ -15,6 +15,7 @@ public class AutoRetrainingService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly IWebHostEnvironment _environment;
     private readonly RealWorldDataCollector _dataCollector;
+    private readonly IConfiguration? _configuration;
     private readonly SemaphoreSlim _retrainingLock = new(1, 1);
     
     // Retrain when we have this many new examples
@@ -28,16 +29,24 @@ public class AutoRetrainingService : BackgroundService
         ILogger<AutoRetrainingService> logger,
         IServiceProvider serviceProvider,
         IWebHostEnvironment environment,
-        RealWorldDataCollector dataCollector)
+        RealWorldDataCollector dataCollector,
+        IConfiguration? configuration = null)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _environment = environment;
         _dataCollector = dataCollector;
+        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (_configuration?.GetValue("Learning:AutoRetrain", false) != true)
+        {
+            _logger.LogInformation("Auto-retrain is off. Set Learning:AutoRetrain=true to enable it.");
+            return;
+        }
+
         _logger.LogInformation("Auto-retraining service started. Will check for new data every {Interval} minutes", CheckIntervalMinutes);
         
         while (!stoppingToken.IsCancellationRequested)

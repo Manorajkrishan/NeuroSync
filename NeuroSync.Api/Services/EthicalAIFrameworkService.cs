@@ -117,6 +117,13 @@ public class EthicalAIFrameworkService
     /// <summary>
     /// Set user consent
     /// </summary>
+    /// <summary>Replace the in-memory copy without writing the consent file. Used when the database is the source of truth.</summary>
+    public void Hydrate(string userId, EthicalAIConsent consent)
+    {
+        consent.UserId = userId;
+        _consents[userId] = consent;
+    }
+
     public void SetConsent(string userId, EthicalAIConsent consent)
     {
         consent.UserId = userId;

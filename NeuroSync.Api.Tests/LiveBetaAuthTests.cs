@@ -155,6 +155,68 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
         sessions.GetRecentTurns(session.UserId, sessionId).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Preferences_CanBeReadAndUpdatedForSignedInUser()
+    {
+        var client = _factory.CreateClient();
+        var session = await RegisterAsync(client, "prefs");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        var initial = await client.GetAsync("/api/account/preferences");
+        initial.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await initial.Content.ReadAsStringAsync()).Should().Contain("Beta Tester");
+
+        var updated = await client.PutAsJsonAsync("/api/account/preferences", new
+        {
+            displayName = "Krish Test",
+            locale = "tanglish"
+        });
+        var body = await updated.Content.ReadAsStringAsync();
+        updated.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        body.Should().Contain("Krish Test");
+        body.Should().Contain("tanglish");
+    }
+
+    [Fact]
+    public async Task ChangePassword_InvalidatesOldPassword_AndAcceptsNewPassword()
+    {
+        var client = _factory.CreateClient();
+        var email = $"password.{Guid.NewGuid():N}@example.com";
+        const string oldPassword = "Live-Beta-1a";
+        const string newPassword = "New-Live-Beta-2b!";
+
+        var register = await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            email,
+            password = oldPassword,
+            displayName = "Password Tester",
+            acceptWellbeingNotice = true,
+            acknowledgeRetention = true
+        });
+        var registerBody = await register.Content.ReadAsStringAsync();
+        register.StatusCode.Should().Be(HttpStatusCode.OK, registerBody);
+        using var doc = System.Text.Json.JsonDocument.Parse(registerBody);
+        var token = doc.RootElement.GetProperty("accessToken").GetString();
+        token.Should().NotBeNullOrWhiteSpace();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var changed = await client.PutAsJsonAsync("/api/account/password", new
+        {
+            currentPassword = oldPassword,
+            newPassword
+        });
+        var changedBody = await changed.Content.ReadAsStringAsync();
+        changed.StatusCode.Should().Be(HttpStatusCode.OK, changedBody);
+
+        client.DefaultRequestHeaders.Authorization = null;
+        var oldLogin = await client.PostAsJsonAsync("/api/auth/login", new { email, password = oldPassword });
+        oldLogin.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var newLogin = await client.PostAsJsonAsync("/api/auth/login", new { email, password = newPassword });
+        var newLoginBody = await newLogin.Content.ReadAsStringAsync();
+        newLogin.StatusCode.Should().Be(HttpStatusCode.OK, newLoginBody);
+    }
+
     private static async Task<(string Token, string UserId)> RegisterAsync(HttpClient client, string prefix)
     {
         var email = $"{prefix}.{Guid.NewGuid():N}@example.com";

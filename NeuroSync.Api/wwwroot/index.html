@@ -56,7 +56,7 @@
     .user { align-self: flex-end; background: #2a4a3d; }
     .ai { align-self: flex-start; background: rgba(255,255,255,.06); border: 1px solid var(--line); }
     .composer { display: flex; gap: 8px; margin-top: 10px; }
-    .composer textarea, input[type="email"], input[type="password"], input[type="text"] {
+    .composer textarea, input[type="email"], input[type="password"], input[type="text"], select {
       width: 100%; border-radius: 12px; border: 1px solid var(--line);
       background: rgba(0,0,0,.25); color: var(--ink); padding: 10px 12px; font: inherit;
     }
@@ -95,6 +95,10 @@
     .tabs button[aria-selected="false"] { background: transparent; color: var(--ink); border: 1px solid var(--line); }
     .error { color: #f0c2ba; font-size: .9rem; min-height: 1.2em; }
     .who { font-size: .85rem; color: var(--muted); }
+    .settings { display: grid; gap: 8px; margin-top: 10px; }
+    .settings label { display: grid; gap: 5px; border: 0; padding: 0; align-items: stretch; }
+    .settings button { width: 100%; }
+    .settings .status { min-height: 1.1em; color: var(--muted); font-size: .8rem; }
     a { color: #8fd0b4; }
   </style>
 </head>
@@ -165,6 +169,26 @@
         <button class="danger" id="deleteAccountBtn" type="button" style="width:100%; margin-top:8px;">Delete account</button>
         <p class="note"><a href="/privacy.html">Privacy policy and data retention</a></p>
 
+        <details class="dev" id="accountPanel">
+          <summary>Profile &amp; security</summary>
+          <div class="settings">
+            <label>Display name<input id="profileName" type="text" maxlength="40" autocomplete="nickname" /></label>
+            <label>Conversation language
+              <select id="profileLocale">
+                <option value="en">English</option>
+                <option value="ta">Tamil</option>
+                <option value="tanglish">Tanglish</option>
+              </select>
+            </label>
+            <button class="secondary" id="saveProfileBtn" type="button">Save profile</button>
+            <p class="status" id="profileStatus"></p>
+            <label>Current password<input id="currentPassword" type="password" autocomplete="current-password" /></label>
+            <label>New password<input id="newPassword" type="password" minlength="10" maxlength="128" autocomplete="new-password" /></label>
+            <button class="secondary" id="changePasswordBtn" type="button">Change password</button>
+            <p class="status" id="passwordStatus"></p>
+          </div>
+        </details>
+
         <details class="dev" id="devPanel">
           <summary>Developer / Explainability</summary>
           <p class="note" id="devInsights">Insights appear here after a turn (never in chat).</p>
@@ -220,6 +244,25 @@
       return h;
     }
 
+    async function protectedFetch(path, options = {}) {
+      const originalHeaders = options.headers || {};
+      const send = () => {
+        const merged = new Headers(originalHeaders);
+        Object.entries(headers(false)).forEach(([key, value]) => merged.set(key, value));
+        return fetch(path, { ...options, credentials: 'include', headers: merged });
+      };
+
+      let response = await send();
+      if (response.status === 401 && authRequired) {
+        const session = await refreshSession().catch(() => null);
+        if (session) {
+          userId = session.id;
+          response = await send();
+        }
+      }
+      return response;
+    }
+
     function add(role, text) {
       const d = document.createElement('div');
       d.className = 'bubble ' + role;
@@ -270,6 +313,7 @@
       apiKeyRow.hidden = !requireApiKey;
       add('ai', "Hey. I'm NeuroSync, a wellbeing companion. I can be unsure, and I won't pretend to diagnose you. Memory stays off until you enable it. How are you, really?");
       loadConsent().catch(() => {});
+      if (accessToken) loadPreferences().catch(() => {});
     }
 
     async function refreshSession() {
@@ -283,7 +327,7 @@
     async function loadConsent() {
       const id = currentUserId();
       if (!id) return;
-      const r = await fetch('/api/privacy/consent/' + encodeURIComponent(id), { headers: headers(false), credentials: 'include' });
+      const r = await protectedFetch('/api/privacy/consent/' + encodeURIComponent(id), { headers: headers(false) });
       if (r.status === 401) return;
       const c = await r.json();
       cMemory.checked = !!c.memoryConsent;
@@ -292,6 +336,66 @@
       cIoT.checked = !!c.ioTConsent || !!c.iotConsent;
       cShare.checked = !!c.dataSharingConsent;
     }
+
+    async function loadPreferences() {
+      if (!accessToken) return;
+      const r = await protectedFetch('/api/account/preferences', { headers: headers(false) });
+      if (!r.ok) return;
+      const p = await r.json();
+      profileName.value = p.displayName || '';
+      profileLocale.value = p.locale || 'en';
+    }
+
+    saveProfileBtn.onclick = async () => {
+      profileStatus.textContent = '';
+      const r = await protectedFetch('/api/account/preferences', {
+        method: 'PUT',
+        headers: headers(true),
+        body: JSON.stringify({
+          displayName: profileName.value.trim(),
+          locale: profileLocale.value
+        })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        profileStatus.textContent = data.error || 'Profile could not be saved.';
+        return;
+      }
+      whoChip.textContent = data.displayName || whoChip.textContent;
+      profileStatus.textContent = 'Profile saved.';
+    };
+
+    changePasswordBtn.onclick = async () => {
+      passwordStatus.textContent = '';
+      if (!currentPassword.value || !newPassword.value) {
+        passwordStatus.textContent = 'Enter your current and new password.';
+        return;
+      }
+      const r = await protectedFetch('/api/account/password', {
+        method: 'PUT',
+        headers: headers(true),
+        body: JSON.stringify({
+          currentPassword: currentPassword.value,
+          newPassword: newPassword.value
+        })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        passwordStatus.textContent = data.error || 'Password could not be changed.';
+        return;
+      }
+
+      currentPassword.value = '';
+      newPassword.value = '';
+      accessToken = null;
+      userId = null;
+      clearCompanionSessionId();
+      chat.innerHTML = '';
+      app.hidden = true;
+      gate.hidden = false;
+      setMode('login');
+      authError.textContent = 'Password changed. Sign in again with your new password.';
+    };
 
     function setMode(next) {
       mode = next;
@@ -346,9 +450,8 @@
       const id = currentUserId();
       if (!id) return;
       localStorage.setItem('ns_api_key', apiKey.value.trim());
-      const res = await fetch('/api/privacy/consent/' + encodeURIComponent(id), {
+      const res = await protectedFetch('/api/privacy/consent/' + encodeURIComponent(id), {
         method: 'PUT',
-        credentials: 'include',
         headers: headers(true),
         body: JSON.stringify({
           userId: id,
@@ -369,7 +472,9 @@
     exportBtn.onclick = async () => {
       const id = currentUserId();
       const path = accessToken ? '/api/account/export' : '/api/privacy/export/' + encodeURIComponent(id);
-      const r = await fetch(path, { headers: headers(false), credentials: 'include' });
+      const r = accessToken
+        ? await protectedFetch(path, { headers: headers(false) })
+        : await fetch(path, { headers: headers(false), credentials: 'include' });
       if (!r.ok) { add('ai', 'Export failed.'); return; }
       const blob = new Blob([JSON.stringify(await r.json(), null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -382,7 +487,7 @@
       const id = currentUserId();
       if (!id) return;
       if (!confirm('Delete conversation history for this account? Your sign-in stays.')) return;
-      const res = await fetch('/api/privacy/memory/' + encodeURIComponent(id), { method: 'DELETE', headers: headers(false), credentials: 'include' });
+      const res = await protectedFetch('/api/privacy/memory/' + encodeURIComponent(id), { method: 'DELETE', headers: headers(false) });
       if (!res.ok) { add('ai', 'History deletion failed.'); return; }
       clearCompanionSessionId();
       add('ai', 'History and current chat context deleted. A fresh session will start with your next message.');
@@ -393,7 +498,7 @@
       if (!accessToken) return;
       const typed = prompt('This permanently deletes the account, consent, memory, history, and baseline. Type DELETE to confirm.');
       if (typed !== 'DELETE') return;
-      const res = await fetch('/api/account', { method: 'DELETE', headers: headers(false), credentials: 'include' });
+      const res = await protectedFetch('/api/account', { method: 'DELETE', headers: headers(false) });
       if (!res.ok) { add('ai', 'Account deletion failed.'); return; }
       accessToken = null;
       userId = null;
@@ -405,7 +510,7 @@
     };
 
     signOutBtn.onclick = async () => {
-      await fetch('/api/auth/logout', { method: 'POST', headers: headers(false), credentials: 'include' });
+      await protectedFetch('/api/auth/logout', { method: 'POST', headers: headers(false) });
       accessToken = null;
       userId = null;
       clearCompanionSessionId();

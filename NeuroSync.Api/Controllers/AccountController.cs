@@ -58,6 +58,21 @@ public class AccountController : ControllerBase
         return Ok(payload);
     }
 
+    [HttpGet("preferences")]
+    public async Task<IActionResult> GetPreferences(CancellationToken cancellationToken)
+    {
+        var user = await _users.GetUserAsync(User);
+        if (user == null)
+            return Unauthorized(new { error = "Sign in required." });
+
+        var preferences = await _accounts.GetPreferencesAsync(user.Id, cancellationToken);
+        return Ok(new
+        {
+            displayName = user.DisplayName ?? preferences.DisplayName,
+            locale = preferences.Locale
+        });
+    }
+
     [HttpPut("preferences")]
     public async Task<IActionResult> Preferences([FromBody] PreferenceUpdate request, CancellationToken cancellationToken)
     {
@@ -87,6 +102,40 @@ public class AccountController : ControllerBase
 
         await _accounts.UpdatePreferencesAsync(user.Id, displayName, locale, cancellationToken);
         return Ok(await _accounts.GetPreferencesAsync(user.Id, cancellationToken));
+    }
+
+    [HttpPut("password")]
+    public async Task<IActionResult> ChangePassword([FromBody] PasswordChangeRequest request, CancellationToken cancellationToken)
+    {
+        var user = await _users.GetUserAsync(User);
+        if (user == null)
+            return Unauthorized(new { error = "Sign in required." });
+        if (request == null || string.IsNullOrWhiteSpace(request.CurrentPassword) || string.IsNullOrWhiteSpace(request.NewPassword))
+            return BadRequest(new { error = "Current and new passwords are required." });
+        if (request.CurrentPassword.Length > 128 || request.NewPassword.Length > 128)
+            return BadRequest(new { error = "Password is too long." });
+
+        var changed = await _users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!changed.Succeeded)
+        {
+            await _audit.WriteAsync("account.password.rejected", user.Id, StatusCodes.Status400BadRequest, cancellationToken);
+            return BadRequest(new
+            {
+                error = "Password could not be changed.",
+                details = changed.Errors.Select(e => e.Description)
+            });
+        }
+
+        await _tokens.RevokeAllAsync(user.Id, cancellationToken);
+        Response.Cookies.Delete(AuthPolicy.RefreshCookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps || _env.IsProduction(),
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/auth"
+        });
+        await _audit.WriteAsync("account.password.changed", user.Id, StatusCodes.Status200OK, cancellationToken);
+        return Ok(new { changed = true, requiresSignIn = true });
     }
 
     [HttpDelete]
@@ -123,4 +172,10 @@ public sealed class PreferenceUpdate
 {
     public string? DisplayName { get; set; }
     public string? Locale { get; set; }
+}
+
+public sealed class PasswordChangeRequest
+{
+    public string CurrentPassword { get; set; } = "";
+    public string NewPassword { get; set; } = "";
 }

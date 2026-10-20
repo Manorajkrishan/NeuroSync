@@ -18,8 +18,8 @@ public class EmotionModelTrainer
     }
 
     /// <summary>
-    /// Trains the emotion classification model using the provided training data.
-    /// Upgraded with: Word Embeddings (Priority 2), LightGbm (Priority 3), optimized for 10,000+ datasets (Priority 1).
+    /// Trains the emotion classification model using only local ML.NET components.
+    /// The production runtime must not download pretrained embedding assets at startup.
     /// </summary>
     public ITransformer TrainModel(List<EmotionData> trainingData, string? modelPath = null)
     {
@@ -35,27 +35,19 @@ public class EmotionModelTrainer
         Console.WriteLine($"Training set: {dataSplit.TrainSet.GetRowCount():N0} examples");
         Console.WriteLine($"Test set: {dataSplit.TestSet.GetRowCount():N0} examples");
 
-        // PRIORITY 2: Build pipeline with Word Embeddings (FastText Sentiment-Specific)
-        // This allows the model to understand word relationships (e.g., "happy" vs "joyful")
+        // Production-safe text pipeline.
+        // FeaturizeText and SDCA are fully local and do not fetch pretrained resources.
+        // This keeps cold starts deterministic on sandboxed/free hosting environments.
         var trainingPipeline = _mlContext.Transforms.Conversion.MapValueToKey("Label", "Label")
-            // Tokenize text into words
-            .Append(_mlContext.Transforms.Text.TokenizeIntoWords("Words", "Text"))
-            // PRIORITY 2: Apply Word Embeddings for better word understanding
-            .Append(_mlContext.Transforms.Text.ApplyWordEmbedding(
+            .Append(_mlContext.Transforms.Text.FeaturizeText(
                 outputColumnName: "Features",
-                inputColumnName: "Words",
-                modelKind: WordEmbeddingEstimator.PretrainedModelKind.SentimentSpecificWordEmbedding))
-            // PRIORITY 3: Use LightGbm instead of SDCA for better accuracy (best for text classification)
-            .Append(_mlContext.MulticlassClassification.Trainers.LightGbm(
+                inputColumnName: "Text"))
+            .Append(_mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy(
                 labelColumnName: "Label",
-                featureColumnName: "Features",
-                numberOfIterations: dataCount > 5000 ? 200 : 100, // More iterations for larger datasets
-                numberOfLeaves: dataCount > 5000 ? 63 : 31, // More leaves for larger datasets
-                minimumExampleCountPerLeaf: dataCount > 5000 ? 20 : 10, // Adapt to dataset size
-                learningRate: 0.3));
+                featureColumnName: "Features"));
 
         // Train the model
-        Console.WriteLine("Training started... This may take a few minutes for large datasets.");
+        Console.WriteLine("Training started with local text features...");
         var trainedModel = trainingPipeline.Fit(dataSplit.TrainSet);
 
         // Evaluate the model BEFORE converting keys to values

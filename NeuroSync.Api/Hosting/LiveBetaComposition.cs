@@ -210,12 +210,47 @@ public static class LiveBetaComposition
         var redis = builder.Configuration["Redis:ConnectionString"];
         if (!string.IsNullOrWhiteSpace(redis))
         {
-            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redis));
+            builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+                ConnectionMultiplexer.Connect(ParseRedisConfiguration(redis)));
             builder.Services.AddSingleton<IEphemeralSessionContext, RedisSessionContextStore>();
             return;
         }
 
         builder.Services.AddSingleton<IEphemeralSessionContext>(sp => sp.GetRequiredService<EphemeralSessionContextService>());
+    }
+
+    internal static ConfigurationOptions ParseRedisConfiguration(string configuration)
+    {
+        var value = configuration.Trim();
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            (uri.Scheme.Equals("redis", StringComparison.OrdinalIgnoreCase) ||
+             uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase)))
+        {
+            var options = new ConfigurationOptions
+            {
+                AbortOnConnectFail = false,
+                Ssl = uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase)
+            };
+            options.EndPoints.Add(uri.Host, uri.Port > 0 ? uri.Port : 6379);
+
+            if (!string.IsNullOrWhiteSpace(uri.UserInfo))
+            {
+                var credentials = uri.UserInfo.Split(':', 2);
+                if (credentials.Length > 0 && !string.IsNullOrWhiteSpace(credentials[0]))
+                    options.User = Uri.UnescapeDataString(credentials[0]);
+                if (credentials.Length > 1 && !string.IsNullOrWhiteSpace(credentials[1]))
+                    options.Password = Uri.UnescapeDataString(credentials[1]);
+            }
+
+            if (options.Ssl)
+                options.SslHost = uri.Host;
+
+            return options;
+        }
+
+        var parsed = ConfigurationOptions.Parse(value);
+        parsed.AbortOnConnectFail = false;
+        return parsed;
     }
 
     private static void AddRateLimits(WebApplicationBuilder builder)

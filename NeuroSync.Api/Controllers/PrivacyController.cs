@@ -15,6 +15,7 @@ public class PrivacyController : ControllerBase
     private readonly UserProfileService _profiles;
     private readonly EmotionalBaselineService _baseline;
     private readonly EthicalAIFrameworkService _consent;
+    private readonly IEphemeralSessionContext _sessions;
     private readonly IAccountDataService _accounts;
     private readonly IAuditLog _audit;
     private readonly ILogger<PrivacyController> _logger;
@@ -24,6 +25,7 @@ public class PrivacyController : ControllerBase
         UserProfileService profiles,
         EmotionalBaselineService baseline,
         EthicalAIFrameworkService consent,
+        IEphemeralSessionContext sessions,
         IAccountDataService accounts,
         IAuditLog audit,
         ILogger<PrivacyController> logger)
@@ -32,6 +34,7 @@ public class PrivacyController : ControllerBase
         _profiles = profiles;
         _baseline = baseline;
         _consent = consent;
+        _sessions = sessions;
         _accounts = accounts;
         _audit = audit;
         _logger = logger;
@@ -169,6 +172,7 @@ public class PrivacyController : ControllerBase
         if (!UserIdSanitizer.TryNormalize(userId, out var safe))
             return BadRequest(new { error = "Invalid userId" });
 
+        _sessions.ClearUser(safe);
         _memory.ClearUserData(safe);
         _profiles.DeleteProfile(safe);
         _consent.RevokeAllSensitive(safe);

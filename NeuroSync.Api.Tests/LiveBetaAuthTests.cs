@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NeuroSync.Api.Data;
+using NeuroSync.Api.Services;
 using Xunit;
 
 namespace NeuroSync.Api.Tests;
@@ -128,6 +129,30 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
             (await db.PersistentMemories.AnyAsync(m => m.UserId == session.UserId)).Should().BeFalse();
             (await db.RefreshTokens.AnyAsync(t => t.UserId == session.UserId)).Should().BeFalse();
         }
+    }
+
+    [Fact]
+    public async Task DeleteHistory_ClearsCurrentEphemeralSession()
+    {
+        var client = _factory.CreateClient();
+        var session = await RegisterAsync(client, "historyclear");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        const string sessionId = "history_clear_session";
+        var chat = await client.PostAsJsonAsync("/api/companion/message", new
+        {
+            text = "nalaiku interview",
+            userId = session.UserId,
+            sessionId
+        });
+        chat.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var sessions = _factory.Services.GetRequiredService<IEphemeralSessionContext>();
+        sessions.GetRecentTurns(session.UserId, sessionId).Should().NotBeEmpty();
+
+        var deleted = await client.DeleteAsync($"/api/privacy/memory/{session.UserId}");
+        deleted.StatusCode.Should().Be(HttpStatusCode.OK);
+        sessions.GetRecentTurns(session.UserId, sessionId).Should().BeEmpty();
     }
 
     private static async Task<(string Token, string UserId)> RegisterAsync(HttpClient client, string prefix)

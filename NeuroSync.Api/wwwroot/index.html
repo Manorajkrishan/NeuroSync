@@ -189,6 +189,9 @@
       if (!id) return;
       try { sessionStorage.setItem(COMPANION_SESSION_KEY, id); } catch (_) {}
     }
+    function clearCompanionSessionId() {
+      try { sessionStorage.removeItem(COMPANION_SESSION_KEY); } catch (_) {}
+    }
 
     const chat = document.getElementById('chat');
     const gate = document.getElementById('gate');
@@ -379,8 +382,10 @@
       const id = currentUserId();
       if (!id) return;
       if (!confirm('Delete conversation history for this account? Your sign-in stays.')) return;
-      await fetch('/api/privacy/memory/' + encodeURIComponent(id), { method: 'DELETE', headers: headers(false), credentials: 'include' });
-      add('ai', 'History deleted. You can keep chatting with memory off.');
+      const res = await fetch('/api/privacy/memory/' + encodeURIComponent(id), { method: 'DELETE', headers: headers(false), credentials: 'include' });
+      if (!res.ok) { add('ai', 'History deletion failed.'); return; }
+      clearCompanionSessionId();
+      add('ai', 'History and current chat context deleted. A fresh session will start with your next message.');
       loadConsent();
     };
 
@@ -392,6 +397,7 @@
       if (!res.ok) { add('ai', 'Account deletion failed.'); return; }
       accessToken = null;
       userId = null;
+      clearCompanionSessionId();
       chat.innerHTML = '';
       app.hidden = true;
       gate.hidden = false;
@@ -402,6 +408,7 @@
       await fetch('/api/auth/logout', { method: 'POST', headers: headers(false), credentials: 'include' });
       accessToken = null;
       userId = null;
+      clearCompanionSessionId();
       chat.innerHTML = '';
       app.hidden = true;
       gate.hidden = false;

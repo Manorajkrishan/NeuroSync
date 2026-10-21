@@ -138,6 +138,15 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
         var session = await RegisterAsync(client, "historyclear");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
 
+        var consent = await client.PutAsJsonAsync($"/api/privacy/consent/{session.UserId}", new
+        {
+            userId = session.UserId,
+            memoryConsent = true,
+            emotionHistoryConsent = true,
+            dataSharingConsent = false
+        });
+        consent.StatusCode.Should().Be(HttpStatusCode.OK);
+
         const string sessionId = "history_clear_session";
         var chat = await client.PostAsJsonAsync("/api/companion/message", new
         {

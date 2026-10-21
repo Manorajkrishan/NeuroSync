@@ -45,6 +45,10 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
         res.StatusCode.Should().Be(HttpStatusCode.OK);
         res.Headers.GetValues("X-Content-Type-Options").Should().Contain("nosniff");
         res.Headers.GetValues("X-Frame-Options").Should().Contain("DENY");
+        var permissions = res.Headers.GetValues("Permissions-Policy").Single();
+        permissions.Should().Contain("camera=(self)");
+        permissions.Should().Contain("microphone=(self)");
+        permissions.Should().Contain("geolocation=()");
     }
 
     [Fact]

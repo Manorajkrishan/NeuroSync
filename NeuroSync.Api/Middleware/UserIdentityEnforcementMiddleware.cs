@@ -19,7 +19,9 @@ public sealed class SecurityHeadersMiddleware
         headers["X-Content-Type-Options"] = "nosniff";
         headers["X-Frame-Options"] = "DENY";
         headers["Referrer-Policy"] = "no-referrer";
-        headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+        // Camera/microphone are first-party NeuroSync features and still require explicit
+        // browser permission from the user. Keep geolocation disabled because V1 does not need it.
+        headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=()";
         headers["Cross-Origin-Opener-Policy"] = "same-origin";
         headers["Cross-Origin-Resource-Policy"] = "same-origin";
         headers["Content-Security-Policy"] =

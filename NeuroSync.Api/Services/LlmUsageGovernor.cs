@@ -61,6 +61,10 @@ public sealed class LlmUsageGovernor
                 return false;
             }
             _requestsByUser[user] = count + 1;
+            // Reserve the conservative estimated cost before the provider call starts.
+            // This closes the concurrency gap where many requests could all pass the
+            // budget check before any completion had been recorded.
+            _spentUsd += estimate;
             reason = "";
             return true;
         }
@@ -69,29 +73,10 @@ public sealed class LlmUsageGovernor
     public void Record(string? userId, int promptTokens, int completionTokens, long latencyMs)
     {
         var cost = EstimateUsd(promptTokens, completionTokens);
-        var day = DateTime.UtcNow.ToString("yyyyMMdd");
-        if (_redis != null)
-        {
-            try
-            {
-                var db = _redis.GetDatabase();
-                db.StringIncrement("ns:llm:cost:" + day, (double)cost);
-                db.KeyExpire("ns:llm:cost:" + day, TimeSpan.FromHours(48));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "LLM cost counter update failed");
-            }
-        }
-        else
-        {
-            lock (_gate)
-            {
-                ResetIfNewDay(day);
-                _spentUsd += cost;
-            }
-        }
 
+        // Budget is reserved in TryReserve using the maximum configured output size.
+        // Do not charge the budget a second time here; Record tracks actual usage only
+        // for metrics/observability.
         _metrics.LlmSuccess(promptTokens, completionTokens, cost, latencyMs);
         _logger.LogInformation(
             "LLM completion model tokens prompt={PromptTokens} completion={CompletionTokens} estimatedUsd={EstimatedUsd} latencyMs={LatencyMs}",
@@ -124,30 +109,55 @@ public sealed class LlmUsageGovernor
 
     private bool TryReserveRedis(string day, string user, decimal estimate, out string reason)
     {
+        var lockKey = "ns:llm:budget-lock:" + day;
+        var lockToken = Guid.NewGuid().ToString("N");
         try
         {
             var db = _redis!.GetDatabase();
-            var spent = (decimal)(double)db.StringGet("ns:llm:cost:" + day);
-            var countKey = $"ns:llm:user:{user}:{day}";
-            var count = (int)db.StringGet(countKey);
-            if (count >= PerUserDailyRequests)
+            if (!db.LockTake(lockKey, lockToken, TimeSpan.FromSeconds(2)))
             {
-                reason = "per-user daily request limit";
+                reason = "budget check busy";
                 _metrics.LlmBudgetRejected();
-                _logger.LogWarning("LLM reserved skipped: {Reason}", reason);
+                _logger.LogWarning("LLM reservation failed closed: {Reason}", reason);
                 return false;
             }
-            if (spent + estimate > DailyCostLimitUsd)
+
+            try
             {
-                reason = "daily cost limit";
-                _metrics.LlmBudgetRejected();
-                _logger.LogWarning("LLM reserved skipped: {Reason}", reason);
-                return false;
+                var costKey = "ns:llm:cost:" + day;
+                var spentValue = db.StringGet(costKey);
+                var spent = spentValue.IsNullOrEmpty ? 0m : (decimal)(double)spentValue;
+                var countKey = $"ns:llm:user:{user}:{day}";
+                var countValue = db.StringGet(countKey);
+                var count = countValue.IsNullOrEmpty ? 0 : (int)countValue;
+
+                if (count >= PerUserDailyRequests)
+                {
+                    reason = "per-user daily request limit";
+                    _metrics.LlmBudgetRejected();
+                    _logger.LogWarning("LLM reserved skipped: {Reason}", reason);
+                    return false;
+                }
+
+                if (spent + estimate > DailyCostLimitUsd)
+                {
+                    reason = "daily cost limit";
+                    _metrics.LlmBudgetRejected();
+                    _logger.LogWarning("LLM reserved skipped: {Reason}", reason);
+                    return false;
+                }
+
+                db.StringIncrement(countKey);
+                db.KeyExpire(countKey, TimeSpan.FromHours(48));
+                db.StringIncrement(costKey, (double)estimate);
+                db.KeyExpire(costKey, TimeSpan.FromHours(48));
+                reason = "";
+                return true;
             }
-            db.StringIncrement(countKey);
-            db.KeyExpire(countKey, TimeSpan.FromHours(48));
-            reason = "";
-            return true;
+            finally
+            {
+                db.LockRelease(lockKey, lockToken);
+            }
         }
         catch (Exception ex)
         {

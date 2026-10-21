@@ -109,6 +109,25 @@ public class TemplateCompanionProvider : ICompanionProvider
     private static string Casual(CompanionContext ctx)
     {
         var m = (ctx.CurrentMessage ?? "").Trim().ToLowerInvariant();
+
+        // Short confirmations such as "yes please" are often answers to the previous
+        // assistant question. Use the temporary session turns even when long-term memory is off.
+        if (m is "yes" or "yes pls" or "yes please" or "please" or "sure" or "yeah" or "yep")
+        {
+            var previousUser = ctx.RecentTurns
+                .Where(t => string.Equals(t.Role, "user", StringComparison.OrdinalIgnoreCase))
+                .Select(t => t.Text?.Trim().ToLowerInvariant() ?? "")
+                .LastOrDefault(t => !string.IsNullOrWhiteSpace(t));
+
+            if (!string.IsNullOrWhiteSpace(previousUser) &&
+                ContainsAny(previousUser, "tired", "exhausted", "drained", "worn out", "burnt out", "burned out", "no energy"))
+            {
+                return Pick(
+                    "Of course. That sounds like a draining day. Was it mostly lack of sleep, a heavy day, or both?",
+                    "Yeah, tell me. Is this more physical tiredness, mental overload, or a mix of both?",
+                    "I'm here. What wore you out most today — sleep, work/study, people, or just everything piling up?");
+            }
+        }
         if (m.Contains("how are you") || m.Contains("how's it going") || m.Contains("how r you") || m.Contains("how r u"))
             return Pick(
                 "I'm good — I'm here with you. How's your day going?",
@@ -138,6 +157,17 @@ public class TemplateCompanionProvider : ICompanionProvider
     private static string Emotional(CompanionContext ctx)
     {
         var m = (ctx.CurrentMessage ?? "").ToLowerInvariant();
+
+        // Fatigue is meaningful user content even when the emotion classifier is uncertain.
+        // Respond to what the user actually said instead of turning model uncertainty into
+        // conversational uncertainty.
+        if (ContainsAny(m, "tired", "exhausted", "drained", "worn out", "burnt out", "burned out", "no energy", "fatigued"))
+        {
+            return Pick(
+                "That sounds exhausting. Was today physically tiring, mentally heavy, or both?",
+                "Sounds like you've had a long day. What drained you most?",
+                "Yeah, being that tired can make everything feel harder. Did you sleep badly, or was today just a lot?");
+        }
         if (m.Contains("miss her") || m.Contains("miss him") || m.Contains("miss them") || m.Contains("i miss"))
         {
             return ctx.Mode == CompanionInteractionMode.Listen
@@ -186,6 +216,9 @@ public class TemplateCompanionProvider : ICompanionProvider
             _ => draft
         };
     }
+
+    private static bool ContainsAny(string text, params string[] cues) =>
+        cues.Any(c => text.Contains(c, StringComparison.Ordinal));
 
     private static string Pick(params string[] options) =>
         options[Rng.Next(options.Length)];

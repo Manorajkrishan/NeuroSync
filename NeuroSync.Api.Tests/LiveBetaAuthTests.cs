@@ -142,6 +142,15 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
         var session = await RegisterAsync(client, "historyclear");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
 
+        var consent = await client.PutAsJsonAsync($"/api/privacy/consent/{session.UserId}", new
+        {
+            userId = session.UserId,
+            memoryConsent = true,
+            emotionHistoryConsent = true,
+            dataSharingConsent = false
+        });
+        consent.StatusCode.Should().Be(HttpStatusCode.OK);
+
         const string sessionId = "history_clear_session";
         var chat = await client.PostAsJsonAsync("/api/companion/message", new
         {
@@ -154,9 +163,34 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
         var sessions = _factory.Services.GetRequiredService<IEphemeralSessionContext>();
         sessions.GetRecentTurns(session.UserId, sessionId).Should().NotBeEmpty();
 
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();
+            (await db.ConversationHistories.AnyAsync(c => c.UserId == session.UserId)).Should().BeTrue();
+            (await db.PersistentMemories.AnyAsync(c => c.UserId == session.UserId)).Should().BeTrue();
+        }
+
         var deleted = await client.DeleteAsync($"/api/privacy/memory/{session.UserId}");
-        deleted.StatusCode.Should().Be(HttpStatusCode.OK);
+        var deletedBody = await deleted.Content.ReadAsStringAsync();
+        deleted.StatusCode.Should().Be(HttpStatusCode.OK, deletedBody);
         sessions.GetRecentTurns(session.UserId, sessionId).Should().BeEmpty();
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();
+            (await db.ConversationHistories.AnyAsync(c => c.UserId == session.UserId)).Should().BeFalse();
+            (await db.PersistentMemories.AnyAsync(c => c.UserId == session.UserId)).Should().BeFalse();
+            (await db.ConversationEntries.AnyAsync(c => c.UserId == session.UserId)).Should().BeFalse();
+            (await db.ConversationSessions.AnyAsync(c => c.UserId == session.UserId)).Should().BeFalse();
+            (await db.EmotionPatterns.AnyAsync(c => c.UserId == session.UserId)).Should().BeFalse();
+
+            var privacy = await db.UserPrivacyProfiles.SingleAsync(p => p.UserId == session.UserId);
+            privacy.MemoryEnabled.Should().BeFalse();
+            privacy.EmotionHistoryEnabled.Should().BeFalse();
+            privacy.FaceAnalysisEnabled.Should().BeFalse();
+            privacy.IoTEnabled.Should().BeFalse();
+            privacy.ShareLearningData.Should().BeFalse();
+        }
     }
 
     [Fact]

@@ -177,6 +177,29 @@ public class LlmCompanionProviderTests
         reply.Message.Should().Be("Recovered.");
     }
 
+    [Fact]
+    public void LlmUsageGovernor_ReservesEstimatedSpendBeforeCompletion()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Companion:Llm:DailyCostLimitUsd"] = "100",
+                ["Companion:Llm:PerUserDailyRequests"] = "10",
+                ["Companion:Llm:MaxTokens"] = "64",
+                ["Companion:Llm:InputPricePerMillionUsd"] = "1000000",
+                ["Companion:Llm:OutputPricePerMillionUsd"] = "1000000"
+            })
+            .Build();
+        var governor = new LlmUsageGovernor(
+            config,
+            Mock.Of<ILogger<LlmUsageGovernor>>(),
+            new LiveBetaMetrics());
+
+        governor.TryReserve("budget-user", 1, out var firstReason).Should().BeTrue(firstReason);
+        governor.TryReserve("budget-user", 1, out var secondReason).Should().BeFalse();
+        secondReason.Should().Be("daily cost limit");
+    }
+
     private static CompanionContext SampleContext(UserIntent intent, string message) =>
         new()
         {

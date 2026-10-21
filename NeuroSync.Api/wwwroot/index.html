@@ -204,6 +204,8 @@
     let requireApiKey = false;
     let inviteOnly = false;
     let mode = 'register';
+    let sendingMessage = false;
+    let savingConsent = false;
 
     const COMPANION_SESSION_KEY = 'ns_companion_session';
     function getCompanionSessionId() {
@@ -448,25 +450,32 @@
 
     saveConsent.onclick = async () => {
       const id = currentUserId();
-      if (!id) return;
-      localStorage.setItem('ns_api_key', apiKey.value.trim());
-      const res = await protectedFetch('/api/privacy/consent/' + encodeURIComponent(id), {
-        method: 'PUT',
-        headers: headers(true),
-        body: JSON.stringify({
-          userId: id,
-          emotionSensingConsent: true,
-          memoryConsent: cMemory.checked,
-          emotionHistoryConsent: cHistory.checked,
-          faceAnalysisConsent: cFace.checked,
-          ioTConsent: cIoT.checked,
-          dataStorageConsent: cMemory.checked || cHistory.checked,
-          dataSharingConsent: cShare.checked,
-          anonymizationEnabled: true
-        })
-      });
-      if (res.ok) add('ai', 'Consent saved. Memory and learning-data sharing stay off unless you enabled them.');
-      else add('ai', 'Consent could not be saved.');
+      if (!id || savingConsent) return;
+      savingConsent = true;
+      saveConsent.disabled = true;
+      try {
+        localStorage.setItem('ns_api_key', apiKey.value.trim());
+        const res = await protectedFetch('/api/privacy/consent/' + encodeURIComponent(id), {
+          method: 'PUT',
+          headers: headers(true),
+          body: JSON.stringify({
+            userId: id,
+            emotionSensingConsent: true,
+            memoryConsent: cMemory.checked,
+            emotionHistoryConsent: cHistory.checked,
+            faceAnalysisConsent: cFace.checked,
+            ioTConsent: cIoT.checked,
+            dataStorageConsent: cMemory.checked || cHistory.checked,
+            dataSharingConsent: cShare.checked,
+            anonymizationEnabled: true
+          })
+        });
+        if (res.ok) add('ai', 'Consent saved. Memory and learning-data sharing stay off unless you enabled them.');
+        else add('ai', 'Consent could not be saved.');
+      } finally {
+        savingConsent = false;
+        saveConsent.disabled = false;
+      }
     };
 
     exportBtn.onclick = async () => {
@@ -520,49 +529,60 @@
     };
 
     async function sendMessage() {
+      if (sendingMessage) return;
       const text = input.value.trim();
       const id = currentUserId();
       if (!text || !id) return;
+
+      sendingMessage = true;
+      send.disabled = true;
       input.value = '';
       add('user', text);
-      const sessionId = getCompanionSessionId();
-      const payload = { text, userId: id };
-      if (sessionId) payload.sessionId = sessionId;
-      let r = await fetch('/api/companion/message', {
-        method: 'POST',
-        credentials: 'include',
-        headers: headers(true),
-        body: JSON.stringify(payload)
-      });
-      if (r.status === 401 && authRequired) {
-        const session = await refreshSession();
-        if (session) {
-          userId = session.id;
-          r = await fetch('/api/companion/message', {
-            method: 'POST',
-            credentials: 'include',
-            headers: headers(true),
-            body: JSON.stringify(payload)
-          });
+      try {
+        const sessionId = getCompanionSessionId();
+        const payload = { text, userId: id };
+        if (sessionId) payload.sessionId = sessionId;
+        let r = await fetch('/api/companion/message', {
+          method: 'POST',
+          credentials: 'include',
+          headers: headers(true),
+          body: JSON.stringify(payload)
+        });
+        if (r.status === 401 && authRequired) {
+          const session = await refreshSession();
+          if (session) {
+            userId = session.id;
+            payload.userId = session.id;
+            r = await fetch('/api/companion/message', {
+              method: 'POST',
+              credentials: 'include',
+              headers: headers(true),
+              body: JSON.stringify(payload)
+            });
+          }
         }
-      }
-      if (r.status === 401) {
-        add('ai', authRequired ? 'Sign in again to continue.' : 'The server refused this request.');
-        return;
-      }
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        add('ai', data.error || 'Something went wrong. Try again.');
-        return;
-      }
-      if (data.sessionId) saveCompanionSessionId(data.sessionId);
-      add('ai', data.message || '...');
-      updateDevInsights(data);
-      if (data.actionOffer) {
-        actionOffer.style.display = 'block';
-        actionOffer.textContent = data.actionOffer + (data.iotBlocked ? ' (IoT consent is off)' : '');
-      } else {
-        actionOffer.style.display = 'none';
+        if (r.status === 401) {
+          add('ai', authRequired ? 'Sign in again to continue.' : 'The server refused this request.');
+          return;
+        }
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          add('ai', data.error || 'Something went wrong. Try again.');
+          return;
+        }
+        if (data.sessionId) saveCompanionSessionId(data.sessionId);
+        add('ai', data.message || '...');
+        updateDevInsights(data);
+        if (data.actionOffer) {
+          actionOffer.style.display = 'block';
+          actionOffer.textContent = data.actionOffer + (data.iotBlocked ? ' (IoT consent is off)' : '');
+        } else {
+          actionOffer.style.display = 'none';
+        }
+      } finally {
+        sendingMessage = false;
+        send.disabled = false;
+        input.focus();
       }
     }
 

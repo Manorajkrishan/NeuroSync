@@ -47,7 +47,9 @@ public class IntentRouterService
 
         if (ContainsAny(lower, "i miss ", "miss her", "miss him", "miss them", "i feel", "feeling", "lonely",
                 "anxious", "scared", "heartbroken", "crying", "can't cope", "overwhelmed", "depressed",
-                "everything feels", "heavier", "i'm tired of", "im tired of"))
+                "everything feels", "heavier", "i'm tired of", "im tired of",
+                "tired", "exhausted", "drained", "worn out", "burnt out", "burned out",
+                "no energy", "fatigued", "couldn't sleep", "couldnt sleep", "slept badly"))
             return UserIntent.EmotionalDisclosure;
 
         if (lower.Contains('?') || lower.StartsWith("what ") || lower.StartsWith("why ") || lower.StartsWith("how ")
@@ -58,7 +60,8 @@ public class IntentRouterService
             return UserIntent.TaskRequest;
 
         // Very short acknowledgements
-        if (stripped is "ok" or "okay" or "k" or "lol" or "lmao" or "yeah" or "yea" or "yep" or "no" or "nah"
+        if (stripped is "ok" or "okay" or "k" or "lol" or "lmao" or "yeah" or "yea" or "yep" or "yes"
+            or "yes pls" or "yes please" or "please" or "sure" or "of course" or "no" or "nah"
             or "hmm" or "hm" or "fine" or "nothing" or "nothing da" or "idk")
             return UserIntent.CasualConversation;
 

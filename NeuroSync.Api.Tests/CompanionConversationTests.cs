@@ -118,9 +118,57 @@ public class CompanionConversationTests
     [InlineData("i miss her", UserIntent.EmotionalDisclosure)]
     [InlineData("just listen to me", UserIntent.ListeningRequest)]
     [InlineData("what should i do about this", UserIntent.AdviceRequest)]
+    [InlineData("i am so tired today", UserIntent.EmotionalDisclosure)]
+    [InlineData("I feel completely drained", UserIntent.EmotionalDisclosure)]
+    [InlineData("yes pls", UserIntent.CasualConversation)]
     public void IntentRouter_ShouldClassifyCoreIntents(string text, UserIntent expected)
     {
         _intents.Detect(text).Should().Be(expected);
+    }
+
+    [Fact]
+    public void TiredStatement_ShouldRespondToFatigue_NotClassifierUncertainty()
+    {
+        var emotion = new EmotionResult(EmotionType.Neutral, 0.2f, "i am so tired today")
+        {
+            Uncertainty = UncertaintyLevel.InsufficientEvidence
+        };
+
+        var response = _engine.GenerateResponse(emotion, "fatigue-user", "i am so tired today");
+
+        response.Parameters["intent"].ToString().Should().Be(nameof(UserIntent.EmotionalDisclosure));
+        var lower = response.Message.ToLowerInvariant();
+        lower.Should().NotContain("not sure i have enough");
+        lower.Should().NotContain("clarify how you're feeling");
+        (lower.Contains("tired") || lower.Contains("exhaust") || lower.Contains("drain") ||
+         lower.Contains("long day") || lower.Contains("sleep") || lower.Contains("wore you out"))
+            .Should().BeTrue($"unexpected fatigue reply: {response.Message}");
+    }
+
+    [Fact]
+    public async Task YesPlease_AfterTiredTurn_ShouldContinueTheThread()
+    {
+        var provider = new TemplateCompanionProvider();
+        var context = new CompanionContext
+        {
+            CurrentMessage = "yes pls",
+            Intent = UserIntent.CasualConversation,
+            Mode = CompanionInteractionMode.Talk,
+            Uncertainty = UncertaintyLevel.InsufficientEvidence,
+            RecentTurns = new List<CompanionConversationTurn>
+            {
+                new() { Role = "user", Text = "i am so tired today", Timestamp = DateTime.UtcNow.AddSeconds(-2) },
+                new() { Role = "assistant", Text = "Sounds like a long day. Want to talk about it?", Timestamp = DateTime.UtcNow.AddSeconds(-1) }
+            }
+        };
+
+        var reply = await provider.GenerateAsync(context);
+        var lower = reply.Message.ToLowerInvariant();
+
+        lower.Should().NotContain("not sure i have enough");
+        (lower.Contains("tired") || lower.Contains("drain") || lower.Contains("sleep") ||
+         lower.Contains("physical") || lower.Contains("mental") || lower.Contains("wore you out"))
+            .Should().BeTrue($"unexpected continuation reply: {reply.Message}");
     }
 
     [Fact]

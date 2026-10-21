@@ -182,6 +182,32 @@ public class LiveBetaAuthTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Preferences_BackfillLegacyAccount_WhenPreferenceRowIsMissing()
+    {
+        var client = _factory.CreateClient();
+        var session = await RegisterAsync(client, "legacyprefs");
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();
+            var row = await db.UserPreferences.SingleAsync(p => p.UserId == session.UserId);
+            db.UserPreferences.Remove(row);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await client.GetAsync("/api/account/preferences");
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        body.Should().Contain("\"locale\":\"en\"");
+
+        using var verifyScope = _factory.Services.CreateScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();
+        (await verifyDb.UserPreferences.AnyAsync(p => p.UserId == session.UserId)).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task ChangePassword_InvalidatesOldPassword_AndAcceptsNewPassword()
     {
         var client = _factory.CreateClient();

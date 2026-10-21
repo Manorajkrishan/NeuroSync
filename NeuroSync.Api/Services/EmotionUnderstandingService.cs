@@ -141,6 +141,21 @@ public class EmotionUnderstandingService
             return;
         }
 
+        // A classifier can be unsure about the emotion label while the user's semantic
+        // content is still perfectly clear (for example, "I'm so tired today").
+        // Do not translate model uncertainty into "I don't understand you".
+        var hasClearWellbeingSignal =
+            result.SignalEstimates.ContainsKey("Fatigue") ||
+            result.SignalEstimates.ContainsKey("Stress") ||
+            result.SignalEstimates.ContainsKey("Loneliness");
+
+        if (hasClearWellbeingSignal)
+        {
+            result.Uncertainty = UncertaintyLevel.Uncertain;
+            result.UncertaintyNote = "The exact emotion is uncertain, but the wellbeing signal is clear.";
+            return;
+        }
+
         if (result.Confidence < 0.45f || (!hadExplicit && !lexical.HasValue && wordCount < 4))
         {
             result.Uncertainty = UncertaintyLevel.InsufficientEvidence;

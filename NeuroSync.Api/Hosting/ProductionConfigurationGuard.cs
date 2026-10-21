@@ -37,10 +37,22 @@ public static class ProductionConfigurationGuard
                 throw new InvalidOperationException("Invite-only beta needs at least one real Beta:InviteCodes value.");
         }
 
-        if (config.GetValue("Companion:Llm:Enabled", false) && string.IsNullOrWhiteSpace(config["Companion:Llm:ApiKey"]))
+        if (config.GetValue("Companion:Llm:Enabled", false))
         {
-            throw new InvalidOperationException(
-                "Companion:Llm:Enabled is true but Companion:Llm:ApiKey is empty. Put the key in the server environment only.");
+            if (string.IsNullOrWhiteSpace(config["Companion:Llm:ApiKey"]))
+            {
+                throw new InvalidOperationException(
+                    "Companion:Llm:Enabled is true but Companion:Llm:ApiKey is empty. Put the key in the server environment only.");
+            }
+
+            // LLM budget/session governance must survive restarts and multiple API instances.
+            // Without Redis, a process restart resets the in-memory counters and can bypass
+            // the configured daily spend/request caps.
+            if (string.IsNullOrWhiteSpace(config["Redis:ConnectionString"]))
+            {
+                throw new InvalidOperationException(
+                    "Production LLM mode requires Redis:ConnectionString so session and LLM budget limits remain consistent across restarts and instances.");
+            }
         }
     }
 

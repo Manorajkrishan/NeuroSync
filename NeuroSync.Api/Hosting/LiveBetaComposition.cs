@@ -153,8 +153,7 @@ public static class LiveBetaComposition
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
             })
-            .AddEntityFrameworkStores<NeuroSyncDbContext>()
-            .AddDefaultTokenProviders();
+            .AddEntityFrameworkStores<NeuroSyncDbContext>();
 
         var configuration = builder.Configuration;
         var environment = builder.Environment;

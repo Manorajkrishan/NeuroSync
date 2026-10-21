@@ -39,6 +39,7 @@ public static class LiveBetaComposition
         AddDatabase(builder);
         AddIdentity(builder);
         AddSessionCache(builder);
+        builder.Services.AddHostedService<RedisWarmupService>();
         builder.Services.AddScoped<IAccountDataService, AccountDataService>();
         builder.Services.AddScoped<IAuditLog, AuditLog>();
         builder.Services.AddScoped<JwtTokenService>();

@@ -14,6 +14,7 @@ public class EthicalAIFrameworkService
     private readonly ConcurrentDictionary<string, EthicalAIConsent> _consents;
     private readonly EthicalAIConfig _config;
     private readonly string _storagePath;
+    private readonly bool _useLegacyFileStorage;
 
     public EthicalAIFrameworkService(
         ILogger<EthicalAIFrameworkService> logger,
@@ -24,11 +25,14 @@ public class EthicalAIFrameworkService
         _config = new EthicalAIConfig();
         _storagePath = Path.Combine(environment.ContentRootPath, "UserConsents");
 
-        // Ensure storage directory exists
-        Directory.CreateDirectory(_storagePath);
-
-        // Load existing consents
-        LoadConsents();
+        // Production consent is persisted in the account database and hydrated by middleware.
+        // Keep legacy file storage only for local development to avoid duplicate sensitive copies.
+        _useLegacyFileStorage = environment.IsDevelopment();
+        if (_useLegacyFileStorage)
+        {
+            Directory.CreateDirectory(_storagePath);
+            LoadConsents();
+        }
     }
 
     /// <summary>
@@ -132,7 +136,8 @@ public class EthicalAIFrameworkService
             consent.ConsentTimestamp = DateTime.UtcNow;
 
         _consents.AddOrUpdate(userId, consent, (key, old) => consent);
-        SaveConsent(userId, consent);
+        if (_useLegacyFileStorage)
+            SaveConsent(userId, consent);
 
         _logger.LogInformation("Consent updated for user: {UserId}, EmotionSensing: {EmotionSensing}, Visual: {Visual}, Audio: {Audio}, Biometric: {Biometric}",
             userId, consent.EmotionSensingConsent, consent.VisualLayerConsent, consent.AudioLayerConsent, consent.BiometricLayerConsent);

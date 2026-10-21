@@ -167,7 +167,7 @@ public class PrivacyController : ControllerBase
 
     /// <summary>Delete NeuroSync history permanently for this user id.</summary>
     [HttpDelete("memory/{userId}")]
-    public IActionResult DeleteMemory(string userId)
+    public async Task<IActionResult> DeleteMemory(string userId, CancellationToken cancellationToken)
     {
         if (!UserIdSanitizer.TryNormalize(userId, out var safe))
             return BadRequest(new { error = "Invalid userId" });
@@ -175,12 +175,21 @@ public class PrivacyController : ControllerBase
         _sessions.ClearUser(safe);
         _memory.ClearUserData(safe);
         _profiles.DeleteProfile(safe);
+
+        // Clear all persisted conversation/memory/baseline records, not only the legacy
+        // in-memory conversation store. This endpoint promises permanent history deletion.
+        await _accounts.DeleteMemoryDataAsync(safe, cancellationToken);
+
         _consent.RevokeAllSensitive(safe);
-        _logger.LogInformation("Permanent delete requested (userId length={Len})", safe.Length);
+        var revoked = _consent.GetOrCreateDefault(safe);
+        await _accounts.SaveConsentAsync(safe, revoked, cancellationToken);
+        await _audit.WriteAsync("privacy.memory.delete", safe, StatusCodes.Status200OK, cancellationToken);
+
+        _logger.LogInformation("Permanent memory delete requested (userId length={Len})", safe.Length);
         return Ok(new
         {
             deleted = true,
-            message = "Conversation memory, profile, and sensitive consents cleared permanently for this user id."
+            message = "Conversation history, persistent memory, baseline, profile, and sensitive consents were deleted."
         });
     }
 }

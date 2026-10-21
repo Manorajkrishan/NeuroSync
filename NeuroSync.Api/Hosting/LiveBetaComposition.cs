@@ -59,6 +59,21 @@ public static class LiveBetaComposition
         ProductionConfigurationGuard.Validate(app.Environment, app.Configuration);
         ApplySchema(app);
 
+        // Resolve the original client IP/scheme before logging, HTTPS policy, auth and rate limiting.
+        // This is essential behind Render/Caddy/reverse proxies so Request.IsHttps and RemoteIpAddress
+        // reflect the real request rather than the internal proxy hop.
+        if (app.Configuration.GetValue("Https:TrustProxy", false))
+        {
+            var forwarded = new ForwardedHeadersOptions
+            {
+                ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                    | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+            };
+            forwarded.KnownNetworks.Clear();
+            forwarded.KnownProxies.Clear();
+            app.UseForwardedHeaders(forwarded);
+        }
+
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -72,18 +87,6 @@ public static class LiveBetaComposition
         });
         app.UseMiddleware<SecurityHeadersMiddleware>();
 
-        if (app.Configuration.GetValue("Https:TrustProxy", false))
-        {
-            var forwarded = new ForwardedHeadersOptions
-            {
-                ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-                    | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
-            };
-            forwarded.KnownNetworks.Clear();
-            forwarded.KnownProxies.Clear();
-            app.UseForwardedHeaders(forwarded);
-        }
-
         if (!app.Environment.IsDevelopment())
         {
             if (app.Configuration.GetValue("Https:Hsts", true))
@@ -94,9 +97,12 @@ public static class LiveBetaComposition
 
         app.UseDefaultFiles();
         app.UseStaticFiles();
+
+        // Endpoint routing must run before CORS/auth so endpoint metadata and preflight handling
+        // are applied consistently. Keep CORS before auth to allow valid browser preflights.
+        app.UseRouting();
         app.UseCors("NeuroSyncCors");
         app.UseMiddleware<ApiKeyAuthMiddleware>();
-        app.UseRouting();
         app.UseAuthentication();
         app.UseRateLimiter();
         app.UseAuthorization();

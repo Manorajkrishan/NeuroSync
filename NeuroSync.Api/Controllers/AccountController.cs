@@ -65,11 +65,12 @@ public class AccountController : ControllerBase
         if (user == null)
             return Unauthorized(new { error = "Sign in required." });
 
+        await _accounts.EnsureDefaultsAsync(user, cancellationToken);
         var preferences = await _accounts.GetPreferencesAsync(user.Id, cancellationToken);
         return Ok(new
         {
-            displayName = user.DisplayName ?? preferences.DisplayName,
-            locale = preferences.Locale
+            displayName = user.DisplayName ?? preferences?.DisplayName,
+            locale = preferences?.Locale ?? "en"
         });
     }
 
@@ -81,6 +82,9 @@ public class AccountController : ControllerBase
             return Unauthorized(new { error = "Sign in required." });
         if (request == null)
             return BadRequest(new { error = "Preferences are required." });
+
+        // Backfill defaults for legacy accounts created before preferences/privacy rows existed.
+        await _accounts.EnsureDefaultsAsync(user, cancellationToken);
 
         string? displayName = null;
         if (request.DisplayName != null)
@@ -101,7 +105,12 @@ public class AccountController : ControllerBase
         }
 
         await _accounts.UpdatePreferencesAsync(user.Id, displayName, locale, cancellationToken);
-        return Ok(await _accounts.GetPreferencesAsync(user.Id, cancellationToken));
+        var saved = await _accounts.GetPreferencesAsync(user.Id, cancellationToken);
+        return Ok(new
+        {
+            displayName = user.DisplayName ?? saved?.DisplayName,
+            locale = saved?.Locale ?? "en"
+        });
     }
 
     [HttpPut("password")]

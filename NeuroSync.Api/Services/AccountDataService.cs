@@ -21,6 +21,7 @@ public interface IAccountDataService
         CancellationToken cancellationToken = default);
     Task<UserPreferenceRecord?> GetPreferencesAsync(string userId, CancellationToken cancellationToken = default);
     Task UpdatePreferencesAsync(string userId, string? displayName, string? locale, CancellationToken cancellationToken = default);
+    Task DeleteMemoryDataAsync(string userId, CancellationToken cancellationToken = default);
     Task DeleteOwnedDataAsync(string userId, CancellationToken cancellationToken = default);
     Task<AccountExport> ExportAsync(string userId, CancellationToken cancellationToken = default);
     Task SweepExpiredAsync(CancellationToken cancellationToken = default);
@@ -208,17 +209,24 @@ public sealed class AccountDataService : IAccountDataService
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteOwnedDataAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task DeleteMemoryDataAsync(string userId, CancellationToken cancellationToken = default)
     {
+        // Delete every persisted wellbeing/conversation record while keeping the account itself.
         _db.PersistentMemories.RemoveRange(_db.PersistentMemories.Where(m => m.UserId == userId));
         _db.ConversationHistories.RemoveRange(_db.ConversationHistories.Where(m => m.UserId == userId));
         _db.UserBaselines.RemoveRange(_db.UserBaselines.Where(m => m.UserId == userId));
-        _db.UserPreferences.RemoveRange(_db.UserPreferences.Where(m => m.UserId == userId));
-        _db.UserPrivacyProfiles.RemoveRange(_db.UserPrivacyProfiles.Where(m => m.UserId == userId));
-        _db.RefreshTokens.RemoveRange(_db.RefreshTokens.Where(m => m.UserId == userId));
         _db.ConversationEntries.RemoveRange(_db.ConversationEntries.Where(m => m.UserId == userId));
         _db.ConversationSessions.RemoveRange(_db.ConversationSessions.Where(m => m.UserId == userId));
         _db.EmotionPatterns.RemoveRange(_db.EmotionPatterns.Where(m => m.UserId == userId));
+        await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteOwnedDataAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        await DeleteMemoryDataAsync(userId, cancellationToken).ConfigureAwait(false);
+        _db.UserPreferences.RemoveRange(_db.UserPreferences.Where(m => m.UserId == userId));
+        _db.UserPrivacyProfiles.RemoveRange(_db.UserPrivacyProfiles.Where(m => m.UserId == userId));
+        _db.RefreshTokens.RemoveRange(_db.RefreshTokens.Where(m => m.UserId == userId));
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

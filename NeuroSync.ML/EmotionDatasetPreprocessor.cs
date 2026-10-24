@@ -98,12 +98,10 @@ public static class EmotionDatasetPreprocessor
             balanced.AddRange(ordered);
             if (ordered.Count < minPerLabel)
             {
-                var index = 0;
-                while (balanced.Count(x => x.Label.Equals(labelGroup.Key, StringComparison.OrdinalIgnoreCase)) < minPerLabel)
+                for (var index = ordered.Count; index < minPerLabel; index++)
                 {
-                    var source = ordered[index % ordered.Count];
+                    var source = ordered[(index - ordered.Count) % ordered.Count];
                     balanced.Add(new EmotionData { Text = source.Text, Label = source.Label });
-                    index++;
                 }
             }
         }

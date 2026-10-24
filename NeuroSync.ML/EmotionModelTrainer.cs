@@ -23,17 +23,23 @@ public class EmotionModelTrainer
     /// </summary>
     public ITransformer TrainModel(List<EmotionData> trainingData, string? modelPath = null)
     {
-        var dataCount = trainingData.Count;
-        Console.WriteLine($"Training model with {dataCount:N0} examples...");
+        var prepared = EmotionDatasetPreprocessor.Prepare(trainingData);
+        if (prepared.Examples.Count < 16)
+            throw new InvalidOperationException("Not enough clean emotion examples to train the model.");
 
-        // Convert list to IDataView
-        var dataView = _mlContext.Data.LoadFromEnumerable(trainingData);
+        Console.WriteLine($"Training input rows: {prepared.InputRows:N0}");
+        Console.WriteLine($"Clean unique rows: {prepared.Examples.Count:N0}");
+        Console.WriteLine($"Duplicate rows removed: {prepared.DuplicateRowsRemoved:N0}");
+        Console.WriteLine($"Conflicting texts removed: {prepared.ConflictingTextsRemoved:N0}");
+        Console.WriteLine("Label counts: " + string.Join(", ", prepared.LabelCounts.Select(kv => $"{kv.Key}={kv.Value}")));
 
-        // Split data into training and testing sets (80/20)
-        var dataSplit = _mlContext.Data.TrainTestSplit(dataView, testFraction: 0.2);
+        var split = EmotionDatasetPreprocessor.DeterministicStratifiedSplit(prepared.Examples, 0.2);
+        var trainView = _mlContext.Data.LoadFromEnumerable(split.Train);
+        var testView = _mlContext.Data.LoadFromEnumerable(split.Test);
+        var fullView = _mlContext.Data.LoadFromEnumerable(prepared.Examples);
 
-        Console.WriteLine($"Training set: {dataSplit.TrainSet.GetRowCount():N0} examples");
-        Console.WriteLine($"Test set: {dataSplit.TestSet.GetRowCount():N0} examples");
+        Console.WriteLine($"Training set: {split.Train.Count:N0} unique examples");
+        Console.WriteLine($"Test set: {split.Test.Count:N0} unique examples");
 
         // Production-safe text pipeline.
         // FeaturizeText and SDCA are fully local and do not fetch pretrained resources.
@@ -48,10 +54,10 @@ public class EmotionModelTrainer
 
         // Train the model
         Console.WriteLine("Training started with local text features...");
-        var trainedModel = trainingPipeline.Fit(dataSplit.TrainSet);
+        var trainedModel = trainingPipeline.Fit(trainView);
 
-        // Evaluate the model BEFORE converting keys to values
-        var predictions = trainedModel.Transform(dataSplit.TestSet);
+        // Evaluate on a deterministic, deduplicated, label-stratified holdout.
+        var predictions = trainedModel.Transform(testView);
         var metrics = _mlContext.MulticlassClassification.Evaluate(
             predictions,
             labelColumnName: "Label",
@@ -63,7 +69,8 @@ public class EmotionModelTrainer
             .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel", "PredictedLabel"));
         
         // Retrain with the full pipeline for production use
-        var model = finalPipeline.Fit(dataSplit.TrainSet);
+        // Production model is trained on every clean unique example after honest holdout evaluation.
+        var model = finalPipeline.Fit(fullView);
 
         // Write to both console and use proper logging
         var accuracyMsg = $"Model Accuracy: {metrics.MacroAccuracy:P2}";
@@ -85,7 +92,7 @@ public class EmotionModelTrainer
         // Save the model if path is provided
         if (!string.IsNullOrEmpty(modelPath))
         {
-            _mlContext.Model.Save(model, dataView.Schema, modelPath);
+            _mlContext.Model.Save(model, fullView.Schema, modelPath);
             Console.WriteLine($"Model saved to: {modelPath}");
         }
 

@@ -146,6 +146,58 @@ public class EvaluationSuiteTests
         responseOk.Should().Be(cases.Count);
     }
 
+    [Fact]
+    public void ClearWellbeingMessages_ShouldAvoidRoboticUncertaintyFallbacks()
+    {
+        var messages = new[]
+        {
+            "I am so tired today",
+            "I feel completely drained after work",
+            "I barely slept last night",
+            "I have no energy after this week",
+            "I am completely worn out",
+            "I think I'm burned out",
+            "work is stressing me out",
+            "my deadline is making me stressed",
+            "I am under so much pressure today",
+            "everything at work feels overwhelming",
+            "I can't focus because I'm overwhelmed",
+            "I'm nervous about tomorrow",
+            "I'm worried about my results",
+            "I feel alone tonight",
+            "nobody really talks to me lately",
+            "I feel lonely even around people",
+            "I couldn't sleep and I'm exhausted",
+            "long day and zero energy",
+            "panic about tomorrow keeps coming back",
+            "I'm scared about the interview"
+        };
+
+        var robotic = 0;
+        foreach (var text in messages)
+        {
+            var emotion = _emotion.DetectEmotion(text);
+            var response = _engine.GenerateResponse(emotion, "gold-clear-user", text);
+            var reply = (response.Message ?? "").ToLowerInvariant();
+            var intent = response.Parameters["intent"]?.ToString();
+
+            var failed = intent == nameof(UserIntent.Unknown)
+                         || reply.Contains("not sure i have enough")
+                         || reply.Contains("clarify how you're feeling")
+                         || reply.Contains("reading this wrong");
+
+            if (failed)
+            {
+                robotic++;
+                _output.WriteLine($"Robotic fallback: {text} => {response.Message} (intent={intent})");
+            }
+        }
+
+        var rate = 100.0 * robotic / messages.Length;
+        _output.WriteLine($"Robotic fallback rate on clear wellbeing gold set: {robotic}/{messages.Length} = {rate:0.0}%");
+        rate.Should().BeLessThanOrEqualTo(5.0);
+    }
+
     [Theory]
     [InlineData("this song says I want to die")]
     [InlineData("just kidding I want to die jk")]

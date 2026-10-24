@@ -1,0 +1,290 @@
+{
+  "generatedAtUtc": "2026-10-24T23:55:16.1211172Z",
+  "sources": {
+    "goEmotionsTrainRows": 16937,
+    "goEmotionsDevRows": 2759,
+    "localRows": 563,
+    "preparedTrainingRows": 20045,
+    "duplicatesRemoved": 213,
+    "conflictingTextsRemoved": 26,
+    "heldOutRows": 2714
+  },
+  "metrics": {
+    "Accuracy": 0.7026529108327192,
+    "MacroF1": 0.528855679790248,
+    "MeanConfidence": 0.6368839710775156,
+    "PerLabel": {
+      "happy": {
+        "Support": 869,
+        "Precision": 0.9157232704402516,
+        "Recall": 0.8377445339470656,
+        "F1": 0.8749999999999999
+      },
+      "sad": {
+        "Support": 288,
+        "Precision": 0.5519287833827893,
+        "Recall": 0.6458333333333334,
+        "F1": 0.5952000000000001
+      },
+      "angry": {
+        "Support": 152,
+        "Precision": 0.5514705882352942,
+        "Recall": 0.4934210526315789,
+        "F1": 0.5208333333333333
+      },
+      "anxious": {
+        "Support": 84,
+        "Precision": 0.7162162162162162,
+        "Recall": 0.6309523809523809,
+        "F1": 0.6708860759493671
+      },
+      "calm": {
+        "Support": 8,
+        "Precision": 0.05263157894736842,
+        "Recall": 0.125,
+        "F1": 0.07407407407407407
+      },
+      "excited": {
+        "Support": 73,
+        "Precision": 0.41304347826086957,
+        "Recall": 0.5205479452054794,
+        "F1": 0.46060606060606063
+      },
+      "frustrated": {
+        "Support": 244,
+        "Precision": 0.3333333333333333,
+        "Recall": 0.26639344262295084,
+        "F1": 0.29612756264236906
+      },
+      "neutral": {
+        "Support": 996,
+        "Precision": 0.7138836772983115,
+        "Recall": 0.7640562248995983,
+        "F1": 0.7381183317167799
+      }
+    },
+    "Confusion": {
+      "happy": {
+        "happy": 728,
+        "sad": 21,
+        "angry": 2,
+        "anxious": 0,
+        "calm": 8,
+        "excited": 22,
+        "frustrated": 13,
+        "neutral": 75
+      },
+      "sad": {
+        "happy": 12,
+        "sad": 186,
+        "angry": 5,
+        "anxious": 5,
+        "calm": 3,
+        "excited": 4,
+        "frustrated": 19,
+        "neutral": 54
+      },
+      "angry": {
+        "happy": 3,
+        "sad": 10,
+        "angry": 75,
+        "anxious": 0,
+        "calm": 0,
+        "excited": 2,
+        "frustrated": 22,
+        "neutral": 40
+      },
+      "anxious": {
+        "happy": 3,
+        "sad": 10,
+        "angry": 1,
+        "anxious": 53,
+        "calm": 2,
+        "excited": 0,
+        "frustrated": 5,
+        "neutral": 10
+      },
+      "calm": {
+        "happy": 1,
+        "sad": 1,
+        "angry": 1,
+        "anxious": 1,
+        "calm": 1,
+        "excited": 0,
+        "frustrated": 1,
+        "neutral": 2
+      },
+      "excited": {
+        "happy": 5,
+        "sad": 3,
+        "angry": 2,
+        "anxious": 1,
+        "calm": 0,
+        "excited": 38,
+        "frustrated": 2,
+        "neutral": 22
+      },
+      "frustrated": {
+        "happy": 10,
+        "sad": 24,
+        "angry": 29,
+        "anxious": 8,
+        "calm": 1,
+        "excited": 5,
+        "frustrated": 65,
+        "neutral": 102
+      },
+      "neutral": {
+        "happy": 33,
+        "sad": 82,
+        "angry": 21,
+        "anxious": 6,
+        "calm": 4,
+        "excited": 21,
+        "frustrated": 68,
+        "neutral": 761
+      }
+    }
+  },
+  "baseline": {
+    "Accuracy": 0.20965364775239498,
+    "MacroF1": 0.13422104506758625,
+    "MeanConfidence": 0.7421542755002122,
+    "PerLabel": {
+      "happy": {
+        "Support": 869,
+        "Precision": 0.6628571428571428,
+        "Recall": 0.1334867663981588,
+        "F1": 0.22222222222222218
+      },
+      "sad": {
+        "Support": 288,
+        "Precision": 0.18115942028985507,
+        "Recall": 0.2604166666666667,
+        "F1": 0.2136752136752137
+      },
+      "angry": {
+        "Support": 152,
+        "Precision": 0.05128205128205128,
+        "Recall": 0.013157894736842105,
+        "F1": 0.020942408376963352
+      },
+      "anxious": {
+        "Support": 84,
+        "Precision": 0.042735042735042736,
+        "Recall": 0.23809523809523808,
+        "F1": 0.07246376811594203
+      },
+      "calm": {
+        "Support": 8,
+        "Precision": 0,
+        "Recall": 0,
+        "F1": 0
+      },
+      "excited": {
+        "Support": 73,
+        "Precision": 0.048,
+        "Recall": 0.1643835616438356,
+        "F1": 0.07430340557275543
+      },
+      "frustrated": {
+        "Support": 244,
+        "Precision": 0.10485436893203884,
+        "Recall": 0.22131147540983606,
+        "F1": 0.14229249011857706
+      },
+      "neutral": {
+        "Support": 996,
+        "Precision": 0.37516170763260026,
+        "Recall": 0.29116465863453816,
+        "F1": 0.3278688524590164
+      }
+    },
+    "Confusion": {
+      "happy": {
+        "happy": 116,
+        "sad": 92,
+        "angry": 9,
+        "anxious": 139,
+        "calm": 35,
+        "excited": 66,
+        "frustrated": 152,
+        "neutral": 260
+      },
+      "sad": {
+        "happy": 1,
+        "sad": 75,
+        "angry": 3,
+        "anxious": 42,
+        "calm": 7,
+        "excited": 11,
+        "frustrated": 70,
+        "neutral": 79
+      },
+      "angry": {
+        "happy": 1,
+        "sad": 30,
+        "angry": 2,
+        "anxious": 31,
+        "calm": 5,
+        "excited": 19,
+        "frustrated": 28,
+        "neutral": 36
+      },
+      "anxious": {
+        "happy": 4,
+        "sad": 15,
+        "angry": 2,
+        "anxious": 20,
+        "calm": 4,
+        "excited": 3,
+        "frustrated": 15,
+        "neutral": 21
+      },
+      "calm": {
+        "happy": 2,
+        "sad": 2,
+        "angry": 0,
+        "anxious": 1,
+        "calm": 0,
+        "excited": 0,
+        "frustrated": 2,
+        "neutral": 1
+      },
+      "excited": {
+        "happy": 9,
+        "sad": 7,
+        "angry": 0,
+        "anxious": 10,
+        "calm": 1,
+        "excited": 12,
+        "frustrated": 15,
+        "neutral": 19
+      },
+      "frustrated": {
+        "happy": 5,
+        "sad": 45,
+        "angry": 5,
+        "anxious": 43,
+        "calm": 3,
+        "excited": 22,
+        "frustrated": 54,
+        "neutral": 67
+      },
+      "neutral": {
+        "happy": 37,
+        "sad": 148,
+        "angry": 18,
+        "anxious": 182,
+        "calm": 25,
+        "excited": 117,
+        "frustrated": 179,
+        "neutral": 290
+      }
+    }
+  },
+  "delta": {
+    "accuracy": 0.4929992630803242,
+    "macroF1": 0.3946346347226617
+  }
+}

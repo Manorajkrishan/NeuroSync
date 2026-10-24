@@ -1,67 +1,108 @@
-using Microsoft.ML.Data;
+using System.Text;
 
 namespace NeuroSync.ML;
 
 /// <summary>
-/// Loads training data from various sources (CSV, TSV, or in-memory).
+/// Loads training data from CSV/TSV files.
 /// </summary>
 public class DatasetLoader
 {
     /// <summary>
     /// Loads training data from a CSV/TSV file.
-    /// Expected format: Text,Label (or Text\tLabel for TSV)
+    /// Expected format: Text,Label (or Text\tLabel for TSV).
+    /// CSV parsing supports quoted commas and escaped quotes.
     /// </summary>
     public static List<EmotionData> LoadFromFile(string filePath)
     {
         var data = new List<EmotionData>();
-        
+
         if (!File.Exists(filePath))
-        {
             throw new FileNotFoundException($"Dataset file not found: {filePath}");
-        }
 
         var lines = File.ReadAllLines(filePath);
-        bool isTsv = filePath.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase);
-        char separator = isTsv ? '\t' : ',';
+        var isTsv = filePath.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase);
 
-        // Skip header if present
-        int startIndex = 0;
-        if (lines.Length > 0 && (lines[0].StartsWith("Text", StringComparison.OrdinalIgnoreCase) || 
-                                  lines[0].StartsWith("Label", StringComparison.OrdinalIgnoreCase)))
+        var startIndex = 0;
+        if (lines.Length > 0)
         {
-            startIndex = 1;
+            var first = lines[0].TrimStart('\uFEFF');
+            if (first.StartsWith("Text", StringComparison.OrdinalIgnoreCase) ||
+                first.StartsWith("Label", StringComparison.OrdinalIgnoreCase))
+                startIndex = 1;
         }
 
-        for (int i = startIndex; i < lines.Length; i++)
+        for (var i = startIndex; i < lines.Length; i++)
         {
-            var line = lines[i].Trim();
-            if (string.IsNullOrEmpty(line)) continue;
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
 
-            var parts = line.Split(separator);
-            if (parts.Length >= 2)
+            string[] parts;
+            if (isTsv)
             {
-                data.Add(new EmotionData
-                {
-                    Text = parts[0].Trim().Trim('"'),
-                    Label = parts[1].Trim().Trim('"').ToLower()
-                });
+                parts = line.Split('\t');
             }
+            else
+            {
+                parts = ParseCsvLine(line).ToArray();
+            }
+
+            if (parts.Length < 2)
+                continue;
+
+            var text = parts[0].Trim();
+            var label = parts[1].Trim().ToLowerInvariant();
+            if (text.Length == 0 || label.Length == 0)
+                continue;
+
+            data.Add(new EmotionData { Text = text, Label = label });
         }
 
         return data;
     }
 
-    /// <summary>
-    /// Combines multiple data sources.
-    /// </summary>
     public static List<EmotionData> CombineDataSources(params List<EmotionData>[] dataSources)
     {
         var combined = new List<EmotionData>();
         foreach (var source in dataSources)
-        {
             combined.AddRange(source);
-        }
         return combined;
     }
-}
 
+    private static IEnumerable<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var current = new StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes)
+            {
+                fields.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        fields.Add(current.ToString());
+        return fields;
+    }
+}

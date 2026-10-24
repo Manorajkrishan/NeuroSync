@@ -34,12 +34,15 @@ public class EmotionModelTrainer
         Console.WriteLine("Label counts: " + string.Join(", ", prepared.LabelCounts.Select(kv => $"{kv.Key}={kv.Value}")));
 
         var split = EmotionDatasetPreprocessor.DeterministicStratifiedSplit(prepared.Examples, 0.2);
-        var trainView = _mlContext.Data.LoadFromEnumerable(split.Train);
+        var balancedTrain = EmotionDatasetPreprocessor.BalanceForTraining(split.Train);
+        var balancedFull = EmotionDatasetPreprocessor.BalanceForTraining(prepared.Examples);
+        var trainView = _mlContext.Data.LoadFromEnumerable(balancedTrain);
         var testView = _mlContext.Data.LoadFromEnumerable(split.Test);
-        var fullView = _mlContext.Data.LoadFromEnumerable(prepared.Examples);
+        var fullView = _mlContext.Data.LoadFromEnumerable(balancedFull);
 
-        Console.WriteLine($"Training set: {split.Train.Count:N0} unique examples");
+        Console.WriteLine($"Training set: {split.Train.Count:N0} unique examples -> {balancedTrain.Count:N0} balanced fit rows");
         Console.WriteLine($"Test set: {split.Test.Count:N0} unique examples");
+        Console.WriteLine($"Final fit rows: {balancedFull.Count:N0}");
 
         // Production-safe text pipeline.
         // FeaturizeText and SDCA are fully local and do not fetch pretrained resources.

@@ -71,6 +71,48 @@ public static class EmotionDatasetPreprocessor
             labelCounts);
     }
 
+    public static List<EmotionData> BalanceForTraining(
+        IReadOnlyList<EmotionData> prepared,
+        int minPerLabel = 1000,
+        int maxPerLabel = 3000)
+    {
+        if (prepared.Count == 0)
+            return new List<EmotionData>();
+
+        minPerLabel = Math.Max(1, minPerLabel);
+        maxPerLabel = Math.Max(minPerLabel, maxPerLabel);
+
+        var balanced = new List<EmotionData>();
+        foreach (var labelGroup in prepared.GroupBy(x => x.Label, StringComparer.OrdinalIgnoreCase))
+        {
+            var ordered = labelGroup
+                .OrderBy(x => StableKey(NormalizeText(x.Text)), StringComparer.Ordinal)
+                .ToList();
+
+            if (ordered.Count >= maxPerLabel)
+            {
+                balanced.AddRange(ordered.Take(maxPerLabel));
+                continue;
+            }
+
+            balanced.AddRange(ordered);
+            if (ordered.Count < minPerLabel)
+            {
+                var index = 0;
+                while (balanced.Count(x => x.Label.Equals(labelGroup.Key, StringComparison.OrdinalIgnoreCase)) < minPerLabel)
+                {
+                    var source = ordered[index % ordered.Count];
+                    balanced.Add(new EmotionData { Text = source.Text, Label = source.Label });
+                    index++;
+                }
+            }
+        }
+
+        return balanced
+            .OrderBy(x => StableKey(x.Label + "\0" + NormalizeText(x.Text)), StringComparer.Ordinal)
+            .ToList();
+    }
+
     public static (List<EmotionData> Train, List<EmotionData> Test) DeterministicStratifiedSplit(
         IReadOnlyList<EmotionData> prepared,
         double testFraction = 0.2)

@@ -183,7 +183,8 @@ public class EmotionUnderstandingService
 
         if (ContainsAny(lower, "lonely", "alone", "no one", "nobody", "isolated"))
             Set("Loneliness", 0.72f);
-        if (ContainsAny(lower, "stress", "stressed", "pressure", "overwhelmed", "anxious", "anxiety"))
+        if (ContainsAny(lower, "stress", "stressed", "pressure", "overwhelmed", "anxious", "anxiety",
+                "worried", "worry", "nervous", "panic", "scared", "afraid"))
             Set("Stress", 0.65f);
         if (ContainsAny(lower, "tired", "exhausted", "drained", "fatigue", "fatigued", "no energy", "slept",
                 "worn out", "burnt out", "burned out"))

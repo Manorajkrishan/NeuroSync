@@ -41,6 +41,9 @@ jobs:
       - name: Restore trainer
         run: dotnet restore NeuroSync.Trainer/NeuroSync.Trainer.csproj
 
+      - name: Capture production baseline
+        run: git show origin/master:NeuroSync.Api/Models/emotion-model.zip > /tmp/neurosync-baseline.zip
+
       - name: Train and evaluate
         run: |
           dotnet run --project NeuroSync.Trainer/NeuroSync.Trainer.csproj \
@@ -51,7 +54,9 @@ jobs:
             --local NeuroSync.Api/Data/emotions.csv \
             --model NeuroSync.Api/Models/emotion-model.zip \
             --report NeuroSync.Api/Models/emotion-model.metrics.json \
-            --min-macro-f1 0.35
+            --baseline-model /tmp/neurosync-baseline.zip \
+            --min-macro-f1 0.35 \
+            --max-macro-regression 0.01
 
       - name: Commit evaluated model artifact
         run: |

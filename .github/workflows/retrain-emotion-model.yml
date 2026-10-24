@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   retrain:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -28,23 +28,39 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.head_ref || github.ref_name }}
 
+      - name: Check retraining inputs changed
+        id: changes
+        shell: bash
+        run: |
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -Eq '^(NeuroSync\.Trainer/|NeuroSync\.ML/|NeuroSync\.Api/Scripts/prepare_goemotions\.py$|NeuroSync\.Api/Data/emotions\.csv$|\.github/workflows/retrain-emotion-model\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Latest commit does not change retraining inputs; skipping model rebuild."
+          fi
+
       - name: Setup .NET
+        if: steps.changes.outputs.run == 'true'
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
 
       - name: Prepare GoEmotions
+        if: steps.changes.outputs.run == 'true'
         run: |
           python3 NeuroSync.Api/Scripts/prepare_goemotions.py \
             --output-dir /tmp/neurosync-goemotions
 
       - name: Restore trainer
+        if: steps.changes.outputs.run == 'true'
         run: dotnet restore NeuroSync.Trainer/NeuroSync.Trainer.csproj
 
       - name: Capture production baseline
+        if: steps.changes.outputs.run == 'true'
         run: git show origin/master:NeuroSync.Api/Models/emotion-model.zip > /tmp/neurosync-baseline.zip
 
       - name: Train and evaluate
+        if: steps.changes.outputs.run == 'true'
         run: |
           dotnet run --project NeuroSync.Trainer/NeuroSync.Trainer.csproj \
             --configuration Release --no-restore -- \
@@ -59,6 +75,7 @@ jobs:
             --max-macro-regression 0.01
 
       - name: Commit evaluated model artifact
+        if: steps.changes.outputs.run == 'true'
         run: |
           remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)"
           local_head="$(git rev-parse HEAD)"

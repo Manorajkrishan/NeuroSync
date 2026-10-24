@@ -42,9 +42,9 @@ Latest evaluated run (2026-10-24 UTC):
 - Held-out examples: 2,714
 - Production baseline accuracy: 20.97%
 - Production baseline macro-F1: 13.42%
-- P2 candidate accuracy: 65.66%
-- P2 candidate macro-F1: 51.39%
-- Macro-F1 improvement: +37.96 percentage points
+- P2 candidate accuracy: 70.27%
+- P2 candidate macro-F1: 52.89%
+- Macro-F1 improvement: +39.46 percentage points
 - Robotic fallback product gate on clear wellbeing messages: <=5%
 
 Per-class results remain part of the generated `emotion-model.metrics.json`. The GoEmotions-to-`calm`

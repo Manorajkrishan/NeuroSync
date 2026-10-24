@@ -1,14 +1,6 @@
 name: Retrain emotion model
 
 on:
-  push:
-    branches: [ p2/ai-quality-rebuild ]
-    paths:
-      - '.github/workflows/retrain-emotion-model.yml'
-      - 'NeuroSync.Trainer/**'
-      - 'NeuroSync.ML/**'
-      - 'NeuroSync.Api/Scripts/prepare_goemotions.py'
-      - 'NeuroSync.Api/Data/emotions.csv'
   pull_request:
     branches: [ master ]
     paths:

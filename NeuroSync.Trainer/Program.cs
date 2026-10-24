@@ -32,7 +32,7 @@ static EvaluationResult Evaluate(ITransformer model, IReadOnlyList<EmotionData> 
         _ => labels.ToDictionary(predicted => predicted, _ => 0, StringComparer.OrdinalIgnoreCase),
         StringComparer.OrdinalIgnoreCase);
 
-    using var predictor = new EmotionPredictionService(model);
+    var predictor = new EmotionPredictionService(model);
     var correct = 0;
     var confidences = new List<double>(rows.Count);
 
@@ -71,6 +71,7 @@ static EvaluationResult Evaluate(ITransformer model, IReadOnlyList<EmotionData> 
         perLabel[label] = new LabelMetric(support, precision, recall, f1);
     }
 
+    predictor.Dispose();
     return new EvaluationResult(
         rows.Count == 0 ? 0d : (double)correct / rows.Count,
         f1Values.Count == 0 ? 0d : f1Values.Average(),

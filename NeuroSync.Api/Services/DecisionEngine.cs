@@ -95,6 +95,14 @@ public class DecisionEngine
         var safety = _safetyGate.Assess(userMessage, context);
 
         var intent = _intents.Detect(userMessage, context, safety.Level);
+
+        // Model uncertainty must not erase clear semantic wellbeing signals.
+        // If the router has no explicit intent but the understanding layer found
+        // fatigue/stress/loneliness language, treat it as a disclosure and respond
+        // to what the user actually said instead of asking them to clarify.
+        if (intent == UserIntent.Unknown && HasClearWellbeingSignal(emotionResult))
+            intent = UserIntent.EmotionalDisclosure;
+
         if (safety.BlockNormalCompanionFlow)
             intent = UserIntent.SafetySensitive;
 
@@ -333,6 +341,12 @@ public class DecisionEngine
 
         return parts.Count == 0 ? null : string.Join(" | ", parts);
     }
+
+    private static bool HasClearWellbeingSignal(EmotionResult emotion) =>
+        emotion.SignalEstimates.Keys.Any(k =>
+            k.Equals("Fatigue", StringComparison.OrdinalIgnoreCase) ||
+            k.Equals("Stress", StringComparison.OrdinalIgnoreCase) ||
+            k.Equals("Loneliness", StringComparison.OrdinalIgnoreCase));
 
     public static bool ShouldTriggerIoT(string? userMessage) =>
         EmotionalIntelligence.IsIoTRequest(userMessage);

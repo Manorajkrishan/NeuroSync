@@ -108,6 +108,10 @@ public static class EmotionDatasetPreprocessor
             return string.Empty;
 
         var normalized = text.Normalize(NormalizationForm.FormKC).ToLowerInvariant();
+
+        // Treat apostrophe/no-apostrophe variants as the same lexical form
+        // ("I'm" == "im", "can't" == "cant") before removing other punctuation.
+        normalized = normalized.Replace("'", string.Empty).Replace("’", string.Empty);
         normalized = Regex.Replace(normalized, @"[^\p{L}\p{N}\s]+", " ");
         normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
         return normalized;

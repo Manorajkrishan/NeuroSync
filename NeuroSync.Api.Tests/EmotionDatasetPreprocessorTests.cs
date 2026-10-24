@@ -27,6 +27,32 @@ public class EmotionDatasetPreprocessorTests
     }
 
     [Fact]
+    public void DatasetLoader_ParsesQuotedCommasAndEscapedQuotes()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "neurosync-dataset-" + Guid.NewGuid().ToString("N") + ".csv");
+        try
+        {
+            File.WriteAllText(path,
+                "Text,Label\n" +
+                "\"I am tired, but okay\",neutral\n" +
+                "\"She said \"\"great\"\" and smiled\",happy\n");
+
+            var rows = DatasetLoader.LoadFromFile(path);
+
+            rows.Should().HaveCount(2);
+            rows[0].Text.Should().Be("I am tired, but okay");
+            rows[0].Label.Should().Be("neutral");
+            rows[1].Text.Should().Be("She said \"great\" and smiled");
+            rows[1].Label.Should().Be("happy");
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void DeterministicSplit_HasNoNormalizedTextLeakage()
     {
         var rows = Enumerable.Range(0, 80)

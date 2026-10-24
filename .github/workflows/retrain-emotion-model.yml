@@ -9,6 +9,14 @@ on:
       - 'NeuroSync.ML/**'
       - 'NeuroSync.Api/Scripts/prepare_goemotions.py'
       - 'NeuroSync.Api/Data/emotions.csv'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/retrain-emotion-model.yml'
+      - 'NeuroSync.Trainer/**'
+      - 'NeuroSync.ML/**'
+      - 'NeuroSync.Api/Scripts/prepare_goemotions.py'
+      - 'NeuroSync.Api/Data/emotions.csv'
   workflow_dispatch:
 
 permissions:
@@ -16,13 +24,17 @@ permissions:
 
 jobs:
   retrain:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -51,8 +63,9 @@ jobs:
 
       - name: Commit evaluated model artifact
         run: |
-          remote_head="$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)"
-          if [ "$remote_head" != "$GITHUB_SHA" ]; then
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)"
+          local_head="$(git rev-parse HEAD)"
+          if [ "$remote_head" != "$local_head" ]; then
             echo "Branch advanced while training; skip stale artifact commit."
             exit 0
           fi
@@ -64,5 +77,5 @@ jobs:
             echo "Model artifact unchanged."
           else
             git commit -m "ml: retrain emotion model on clean human data [skip retrain]"
-            git push origin "HEAD:$GITHUB_REF_NAME"
+            git push origin "HEAD:$TARGET_BRANCH"
           fi

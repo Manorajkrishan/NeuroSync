@@ -26,6 +26,8 @@ public class DecisionEngine
     private readonly EthicalAIFrameworkService? _consent;
     private readonly IEphemeralSessionContext? _ephemeralSession;
     private readonly IAccountDataService? _accounts;
+    private readonly ConversationThreadStateService _threadStates;
+    private readonly ResponseQualityService _responseQuality;
 
     public DecisionEngine(
         IoTDeviceSimulator iotSimulator,
@@ -43,7 +45,9 @@ public class DecisionEngine
         EmotionalIntelligence? emotionalIntelligence = null,
         ICompanionProvider? companionProvider = null,
         IEphemeralSessionContext? ephemeralSession = null,
-        IAccountDataService? accounts = null)
+        IAccountDataService? accounts = null,
+        ConversationThreadStateService? threadStateService = null,
+        ResponseQualityService? responseQuality = null)
     {
         _iotSimulator = iotSimulator;
         _realIoTController = realIoTController;
@@ -59,6 +63,8 @@ public class DecisionEngine
         _consent = consent;
         _ephemeralSession = ephemeralSession;
         _accounts = accounts;
+        _threadStates = threadStateService ?? new ConversationThreadStateService();
+        _responseQuality = responseQuality ?? new ResponseQualityService();
         // companionProvider is optional; CompanionResponseService already holds ICompanionProvider.
         _ = companionProvider;
         _ = emotionalIntelligence;
@@ -105,14 +111,15 @@ public class DecisionEngine
             }
         }
 
-        // Temporary browser-session turns are available even when long-term memory is off.
-        // Feed them into intent routing so short replies keep the previous topic.
+        // Temporary browser-session turns and structured topic state are available
+        // even when long-term memory is off.
         var recentTurns = BuildRecentTurns(userId, sessionId, context, memoryAllowed);
+        var threadState = GetThreadState(userId, sessionId);
 
         // SafetyGate is authoritative before companion generation.
         var safety = _safetyGate.Assess(userMessage, context);
 
-        var intent = _intents.Detect(userMessage, context, safety.Level, recentTurns);
+        var intent = _intents.Detect(userMessage, context, safety.Level, recentTurns, threadState);
 
         // Model uncertainty must not erase clear semantic wellbeing signals.
         // If the router has no explicit intent but the understanding layer found
@@ -179,6 +186,8 @@ public class DecisionEngine
             Baseline = baseline,
             EmotionSignals = emotionSignals,
             RecentTurns = recentTurns,
+            ThreadState = threadState,
+            TopicHint = threadState.Topic,
             RelevantMemory = relevantMemory
         };
 
@@ -187,6 +196,9 @@ public class DecisionEngine
 
         // Responder → ICompanionProvider (Template or Llm→Template fallback).
         var reply = await _responder.GenerateAsync(turnCtx, policy, cancellationToken).ConfigureAwait(false);
+        var quality = _responseQuality.Evaluate(turnCtx, reply);
+        var responseId = Guid.NewGuid().ToString("N");
+        var nextThreadState = _threadStates.Advance(threadState, userMessage, intent, mode, reply.Message);
 
         var offerQuiet = !safety.BlockNormalCompanionFlow
                          && mode is CompanionInteractionMode.Calm or CompanionInteractionMode.Focus
@@ -231,6 +243,8 @@ public class DecisionEngine
                 ["safetyLevel"] = safety.Level.ToString(),
                 ["uncertainty"] = emotionResult.Uncertainty.ToString(),
                 ["companionProvider"] = reply.ProviderId,
+                ["responseId"] = responseId,
+                ["responseQualityScore"] = quality.Score,
                 ["decisionTrace"] = trace.Summary,
                 ["memoryWriteAllowed"] = memoryAllowed,
                 ["exposedEmotionToUser"] = false,
@@ -245,6 +259,10 @@ public class DecisionEngine
                     uncertainty = emotionResult.Uncertainty.ToString(),
                     baselineConfidence = baseline?.BaselineConfidence,
                     baselineDeviation = baseline?.Deviation,
+                    responseQuality = quality.Score,
+                    qualityFlags = quality.Flags,
+                    threadTopic = nextThreadState.Topic,
+                    pendingFollowUp = nextThreadState.PendingFollowUp,
                     policyBlocked = policy.ViolationsBlocked
                 }
             }
@@ -270,6 +288,17 @@ public class DecisionEngine
             && UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
         {
             _ephemeralSession.AppendTurn(userId, sessionId, userMessage, response.Message);
+            _ephemeralSession.UpdateThreadState(userId, sessionId, nextThreadState);
+            _ephemeralSession.RegisterResponse(userId, sessionId, new CompanionResponseMetadata
+            {
+                ResponseId = responseId,
+                ProviderId = reply.ProviderId,
+                Intent = intent,
+                Mode = mode,
+                Locale = turnCtx.Locale,
+                QualityScore = quality.Score,
+                CreatedAtUtc = DateTime.UtcNow
+            });
         }
 
         if (_accounts != null && (memoryAllowed || emotionHistoryAllowed))
@@ -292,6 +321,16 @@ public class DecisionEngine
         }
 
         return response;
+    }
+
+    private CompanionThreadState GetThreadState(string userId, string? sessionId)
+    {
+        if (_ephemeralSession == null
+            || string.IsNullOrWhiteSpace(sessionId)
+            || !UserIdSanitizer.TryNormalizeSessionId(sessionId, out _))
+            return new CompanionThreadState();
+
+        return _ephemeralSession.GetThreadState(userId, sessionId);
     }
 
     private IReadOnlyList<CompanionConversationTurn> BuildRecentTurns(

@@ -18,18 +18,21 @@ public sealed class LlmCompanionProvider : ICompanionProvider
     private readonly IConfiguration _configuration;
     private readonly ILogger<LlmCompanionProvider> _logger;
     private readonly LlmUsageGovernor? _governor;
+    private readonly LlmReplyGuardService _guard;
 
     public LlmCompanionProvider(
         TemplateCompanionProvider fallback,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
         ILogger<LlmCompanionProvider> logger,
+        LlmReplyGuardService guard,
         LlmUsageGovernor? governor = null)
     {
         _fallback = fallback;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _logger = logger;
+        _guard = guard;
         _governor = governor;
     }
 
@@ -83,10 +86,24 @@ public sealed class LlmCompanionProvider : ICompanionProvider
                 return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
             }
 
+            var candidate = completion.Content.Trim();
+            if (!_guard.Accept(context, candidate, out var quality))
+            {
+                var reason = quality.Flags.Count == 0
+                    ? $"quality score {quality.Score:0.00}"
+                    : string.Join(",", quality.Flags);
+                _governor?.RecordFallback("quality gate: " + reason);
+                _logger.LogWarning(
+                    "LLM completion rejected by reply guard score={Score} flags={Flags}",
+                    quality.Score,
+                    string.Join(",", quality.Flags));
+                return await _fallback.GenerateAsync(context, cancellationToken).ConfigureAwait(false);
+            }
+
             _governor?.Record(context.UserId, completion.PromptTokens, completion.CompletionTokens, completion.LatencyMs);
             return new CompanionReply
             {
-                Message = completion.Content.Trim(),
+                Message = candidate,
                 ProviderId = ProviderId,
                 ExposedEmotionToUser = false
             };
@@ -208,6 +225,9 @@ public sealed class LlmCompanionProvider : ICompanionProvider
         var sb = new StringBuilder();
         sb.AppendLine("SERVER-SUPPLIED STRUCTURED CONTEXT:");
         sb.AppendLine($"displayName: {(string.IsNullOrWhiteSpace(context.DisplayName) ? "(none)" : context.DisplayName.Trim())}");
+        sb.AppendLine($"locale: {context.Locale}");
+        sb.AppendLine($"threadTopic: {context.ThreadState.Topic ?? "(none)"}");
+        sb.AppendLine($"pendingFollowUp: {context.ThreadState.PendingFollowUp ?? "(none)"}");
         sb.AppendLine($"intent: {context.Intent}");
         sb.AppendLine($"mode: {context.Mode}");
         sb.AppendLine($"safety: {context.Safety.Level}");

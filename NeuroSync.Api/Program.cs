@@ -194,6 +194,10 @@ builder.Services.AddSingleton<CompanionModeService>();
 builder.Services.AddSingleton<EmotionalBaselineService>();
 builder.Services.AddSingleton<IntentRouterService>();
 builder.Services.AddSingleton<ResponsePolicyService>();
+builder.Services.AddSingleton<ResponseQualityService>();
+builder.Services.AddSingleton<ConversationThreadStateService>();
+builder.Services.AddSingleton<LlmReplyGuardService>();
+builder.Services.AddScoped<CompanionFeedbackService>();
 builder.Services.AddSingleton<TemplateCompanionProvider>();
 builder.Services.AddSingleton<ICompanionProvider>(sp =>
 {
@@ -204,6 +208,7 @@ builder.Services.AddSingleton<ICompanionProvider>(sp =>
         sp.GetRequiredService<IHttpClientFactory>(),
         sp.GetRequiredService<IConfiguration>(),
         sp.GetRequiredService<ILogger<LlmCompanionProvider>>(),
+        sp.GetRequiredService<LlmReplyGuardService>(),
         sp.GetRequiredService<LlmUsageGovernor>());
 });
 builder.Services.AddSingleton<ICompanionResponseService>(sp =>
@@ -240,11 +245,14 @@ builder.Services.AddScoped<DecisionEngine>(sp =>
     var consent = sp.GetService<EthicalAIFrameworkService>();
     var ephemeralSession = sp.GetService<IEphemeralSessionContext>();
     var accounts = sp.GetService<IAccountDataService>();
+    var threadStates = sp.GetRequiredService<ConversationThreadStateService>();
+    var responseQuality = sp.GetRequiredService<ResponseQualityService>();
     return new DecisionEngine(
         iotSimulator, realIoTController, logger,
         safetyGate, intents, modes, policy, responder,
         conversationMemory, companion, baseline, consent,
-        emotionalIntelligence, provider, ephemeralSession, accounts);
+        emotionalIntelligence, provider, ephemeralSession, accounts,
+        threadStates, responseQuality);
 });
 // Add Auto-Retraining Service (background service for self-learning)
 builder.Services.AddHostedService<AutoRetrainingService>(sp =>

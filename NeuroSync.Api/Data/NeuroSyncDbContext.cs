@@ -32,6 +32,7 @@ public class NeuroSyncDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PersistentMemoryItem> PersistentMemories { get; set; }
     public DbSet<ConversationHistoryEntry> ConversationHistories { get; set; }
     public DbSet<UserBaselineRecord> UserBaselines { get; set; }
+    public DbSet<CompanionFeedbackRecord> CompanionFeedback { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<AuditEvent> AuditEvents { get; set; }
 
@@ -173,6 +174,22 @@ public class NeuroSyncDbContext : IdentityDbContext<ApplicationUser>
             entity.HasKey(e => e.UserId);
             entity.Property(e => e.UserId).HasMaxLength(450);
             entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<UserBaselineRecord>(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<CompanionFeedbackRecord>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.UserId).HasMaxLength(450);
+            entity.Property(e => e.ResponseId).HasMaxLength(64);
+            entity.Property(e => e.ReasonCode).HasMaxLength(32);
+            entity.Property(e => e.ProviderId).HasMaxLength(32);
+            entity.Property(e => e.Intent).HasMaxLength(32);
+            entity.Property(e => e.Mode).HasMaxLength(32);
+            entity.Property(e => e.Locale).HasMaxLength(16);
+            entity.HasIndex(e => new { e.UserId, e.ResponseId }).IsUnique();
+            entity.HasIndex(e => e.CreatedAtUtc);
+            entity.HasIndex(e => e.ShareForLearning);
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<RefreshToken>(entity =>

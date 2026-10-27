@@ -36,6 +36,7 @@ public sealed record AccountExport(
     UserPreferenceRecord? Preferences,
     IReadOnlyList<ConversationHistoryEntry> Conversations,
     IReadOnlyList<PersistentMemoryItem> Memories,
+    IReadOnlyList<CompanionFeedbackRecord> CompanionFeedback,
     UserBaselineRecord? Baseline,
     string RetentionNote);
 
@@ -218,6 +219,7 @@ public sealed class AccountDataService : IAccountDataService
         _db.ConversationEntries.RemoveRange(_db.ConversationEntries.Where(m => m.UserId == userId));
         _db.ConversationSessions.RemoveRange(_db.ConversationSessions.Where(m => m.UserId == userId));
         _db.EmotionPatterns.RemoveRange(_db.EmotionPatterns.Where(m => m.UserId == userId));
+        _db.CompanionFeedback.RemoveRange(_db.CompanionFeedback.Where(m => m.UserId == userId));
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -246,6 +248,12 @@ public sealed class AccountDataService : IAccountDataService
             .Take(50)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+        var feedback = await _db.CompanionFeedback.AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .OrderByDescending(m => m.CreatedAtUtc)
+            .Take(200)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
         return new AccountExport(
             DateTime.UtcNow,
             userId,
@@ -255,8 +263,9 @@ public sealed class AccountDataService : IAccountDataService
             await GetPreferencesAsync(userId, cancellationToken).ConfigureAwait(false),
             conversations,
             memories,
+            feedback,
             await _db.UserBaselines.AsNoTracking().FirstOrDefaultAsync(b => b.UserId == userId, cancellationToken).ConfigureAwait(false),
-            $"Session context expires after 45 minutes and is not this export. Stored account data is kept for {RetentionDays} days or until you delete the account. NeuroSync is not a medical record.");
+            $"Session context expires after 45 minutes and is not this export. Stored account data, including explicit response feedback, is kept for {RetentionDays} days or until you delete it. NeuroSync is not a medical record.");
     }
 
     public async Task SweepExpiredAsync(CancellationToken cancellationToken = default)
@@ -268,11 +277,14 @@ public sealed class AccountDataService : IAccountDataService
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         var oldLegacy = await _db.ConversationEntries.Where(c => c.Timestamp < cutoff)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
-        if (oldConversations.Count == 0 && oldMemories.Count == 0 && oldLegacy.Count == 0)
+        var oldFeedback = await _db.CompanionFeedback.Where(c => c.CreatedAtUtc < cutoff)
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (oldConversations.Count == 0 && oldMemories.Count == 0 && oldLegacy.Count == 0 && oldFeedback.Count == 0)
             return;
         _db.ConversationHistories.RemoveRange(oldConversations);
         _db.PersistentMemories.RemoveRange(oldMemories);
         _db.ConversationEntries.RemoveRange(oldLegacy);
+        _db.CompanionFeedback.RemoveRange(oldFeedback);
         await _db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

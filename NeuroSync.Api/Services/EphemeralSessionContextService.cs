@@ -10,6 +10,7 @@ namespace NeuroSync.Api.Services;
 public sealed class EphemeralSessionContextService : IEphemeralSessionContext
 {
     public const int MaxExchanges = 10;
+    public const int MaxResponseMetadata = 12;
     public static readonly TimeSpan SessionTtl = TimeSpan.FromMinutes(45);
 
     private readonly ConcurrentDictionary<string, SessionBucket> _sessions = new();
@@ -18,22 +19,79 @@ public sealed class EphemeralSessionContextService : IEphemeralSessionContext
 
     public IReadOnlyList<CompanionConversationTurn> GetRecentTurns(string userId, string sessionId)
     {
-        if (!TryMakeStorageKey(userId, sessionId, out var key))
-            return Array.Empty<CompanionConversationTurn>();
-
-        if (!_sessions.TryGetValue(key, out var bucket))
+        if (!TryGetActiveBucket(userId, sessionId, out _, out var bucket))
             return Array.Empty<CompanionConversationTurn>();
 
         lock (bucket.Gate)
         {
-            if (IsExpired(bucket))
-            {
-                _sessions.TryRemove(new KeyValuePair<string, SessionBucket>(key, bucket));
-                return Array.Empty<CompanionConversationTurn>();
-            }
-
             bucket.Touch();
             return Flatten(bucket.Exchanges.ToList());
+        }
+    }
+
+    public CompanionThreadState GetThreadState(string userId, string sessionId)
+    {
+        if (!TryGetActiveBucket(userId, sessionId, out _, out var bucket))
+            return new CompanionThreadState();
+
+        lock (bucket.Gate)
+        {
+            bucket.Touch();
+            return Clone(bucket.ThreadState);
+        }
+    }
+
+    public void UpdateThreadState(string userId, string sessionId, CompanionThreadState state)
+    {
+        if (!TryMakeStorageKey(userId, sessionId, out var key))
+            return;
+
+        var bucket = _sessions.GetOrAdd(key, _ => new SessionBucket());
+        lock (bucket.Gate)
+        {
+            ResetIfExpired(bucket);
+            bucket.ThreadState = Clone(state);
+            bucket.ThreadState.UpdatedAtUtc = DateTime.UtcNow;
+            bucket.Touch();
+        }
+    }
+
+    public void RegisterResponse(string userId, string sessionId, CompanionResponseMetadata metadata)
+    {
+        if (metadata == null || string.IsNullOrWhiteSpace(metadata.ResponseId))
+            return;
+        if (!TryMakeStorageKey(userId, sessionId, out var key))
+            return;
+
+        var bucket = _sessions.GetOrAdd(key, _ => new SessionBucket());
+        lock (bucket.Gate)
+        {
+            ResetIfExpired(bucket);
+            bucket.Responses.RemoveAll(x => string.Equals(
+                x.ResponseId, metadata.ResponseId, StringComparison.Ordinal));
+            bucket.Responses.Add(Clone(metadata));
+            while (bucket.Responses.Count > MaxResponseMetadata)
+                bucket.Responses.RemoveAt(0);
+            bucket.Touch();
+        }
+    }
+
+    public CompanionResponseMetadata? GetResponseMetadata(
+        string userId,
+        string sessionId,
+        string responseId)
+    {
+        if (string.IsNullOrWhiteSpace(responseId))
+            return null;
+        if (!TryGetActiveBucket(userId, sessionId, out _, out var bucket))
+            return null;
+
+        lock (bucket.Gate)
+        {
+            bucket.Touch();
+            var found = bucket.Responses.LastOrDefault(x =>
+                string.Equals(x.ResponseId, responseId, StringComparison.Ordinal));
+            return found == null ? null : Clone(found);
         }
     }
 
@@ -50,12 +108,7 @@ public sealed class EphemeralSessionContextService : IEphemeralSessionContext
         var bucket = _sessions.GetOrAdd(key, _ => new SessionBucket());
         lock (bucket.Gate)
         {
-            if (IsExpired(bucket))
-            {
-                bucket.Exchanges.Clear();
-                bucket.Touch();
-            }
-
+            ResetIfExpired(bucket);
             bucket.Touch();
             bucket.Exchanges.Add(new SessionExchange
             {
@@ -98,6 +151,43 @@ public sealed class EphemeralSessionContextService : IEphemeralSessionContext
         return true;
     }
 
+    private bool TryGetActiveBucket(
+        string userId,
+        string sessionId,
+        out string key,
+        out SessionBucket bucket)
+    {
+        bucket = null!;
+        if (!TryMakeStorageKey(userId, sessionId, out key))
+            return false;
+
+        if (!_sessions.TryGetValue(key, out bucket!))
+            return false;
+
+        lock (bucket.Gate)
+        {
+            if (IsExpired(bucket))
+            {
+                _sessions.TryRemove(new KeyValuePair<string, SessionBucket>(key, bucket));
+                bucket = null!;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ResetIfExpired(SessionBucket bucket)
+    {
+        if (!IsExpired(bucket))
+            return;
+
+        bucket.Exchanges.Clear();
+        bucket.Responses.Clear();
+        bucket.ThreadState = new CompanionThreadState();
+        bucket.Touch();
+    }
+
     private static bool IsExpired(SessionBucket bucket) =>
         DateTime.UtcNow - bucket.LastAccessUtc > SessionTtl;
 
@@ -133,10 +223,33 @@ public sealed class EphemeralSessionContextService : IEphemeralSessionContext
         return turns.Count <= 20 ? turns : turns.TakeLast(20).ToList();
     }
 
+    private static CompanionThreadState Clone(CompanionThreadState state) => new()
+    {
+        Topic = state.Topic,
+        PendingFollowUp = state.PendingFollowUp,
+        LastIntent = state.LastIntent,
+        LastMode = state.LastMode,
+        TurnCount = state.TurnCount,
+        UpdatedAtUtc = state.UpdatedAtUtc
+    };
+
+    private static CompanionResponseMetadata Clone(CompanionResponseMetadata metadata) => new()
+    {
+        ResponseId = metadata.ResponseId,
+        ProviderId = metadata.ProviderId,
+        Intent = metadata.Intent,
+        Mode = metadata.Mode,
+        Locale = metadata.Locale,
+        QualityScore = metadata.QualityScore,
+        CreatedAtUtc = metadata.CreatedAtUtc
+    };
+
     private sealed class SessionBucket
     {
         public object Gate { get; } = new();
         public List<SessionExchange> Exchanges { get; } = new();
+        public List<CompanionResponseMetadata> Responses { get; } = new();
+        public CompanionThreadState ThreadState { get; set; } = new();
         public DateTime LastAccessUtc { get; private set; } = DateTime.UtcNow;
 
         public void Touch() => LastAccessUtc = DateTime.UtcNow;

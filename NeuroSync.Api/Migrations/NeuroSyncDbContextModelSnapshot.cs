@@ -344,6 +344,73 @@ namespace NeuroSync.Api.Migrations
                     b.ToTable("ConversationEntries");
                 });
 
+            modelBuilder.Entity("NeuroSync.Api.Data.CompanionFeedbackRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Intent")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ProviderId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<double>("QualityScore")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ResponseId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("ShareForLearning")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("ShareForLearning");
+
+                    b.HasIndex("UserId", "ResponseId")
+                        .IsUnique();
+
+                    b.ToTable("CompanionFeedback");
+                });
+
             modelBuilder.Entity("NeuroSync.Api.Data.ConversationHistoryEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1090,6 +1157,15 @@ namespace NeuroSync.Api.Migrations
                 });
 
             modelBuilder.Entity("NeuroSync.Api.Auth.RefreshToken", b =>
+                {
+                    b.HasOne("NeuroSync.Api.Auth.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("NeuroSync.Api.Data.CompanionFeedbackRecord", b =>
                 {
                     b.HasOne("NeuroSync.Api.Auth.ApplicationUser", null)
                         .WithMany()

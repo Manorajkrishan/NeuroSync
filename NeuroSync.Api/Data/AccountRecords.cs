@@ -38,6 +38,27 @@ public class ConversationHistoryEntry
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// Explicit user feedback on one companion response.
+/// Raw user/assistant message text is deliberately not stored here.
+/// </summary>
+public class CompanionFeedbackRecord
+{
+    public Guid Id { get; set; }
+    public string UserId { get; set; } = "";
+    public string ResponseId { get; set; } = "";
+    public int Rating { get; set; }
+    public string? ReasonCode { get; set; }
+    public string ProviderId { get; set; } = "";
+    public string Intent { get; set; } = "";
+    public string Mode { get; set; } = "";
+    public string Locale { get; set; } = "en";
+    public double QualityScore { get; set; }
+    public bool ShareForLearning { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
 public class UserBaselineRecord
 {
     public string UserId { get; set; } = "";

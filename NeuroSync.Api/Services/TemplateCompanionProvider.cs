@@ -337,6 +337,7 @@ public class TemplateCompanionProvider : ICompanionProvider
 
     private static bool IsTanglish(CompanionContext ctx) =>
         string.Equals(ctx.Locale, "tanglish", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(ctx.Locale, "ta", StringComparison.OrdinalIgnoreCase)
         || ConversationLanguageService.LooksTanglish(ctx.CurrentMessage);
 
     private static string Pick(params string[] options) =>

@@ -64,7 +64,7 @@ public sealed class ResponseQualityService
 
         if (RoboticPhrases.Any(lower.Contains))
         {
-            score -= 0.35;
+            score -= 0.40;
             flags.Add("robotic_uncertainty");
         }
 

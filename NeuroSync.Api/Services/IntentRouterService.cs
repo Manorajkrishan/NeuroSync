@@ -17,7 +17,8 @@ public class IntentRouterService
         string? message,
         ConversationContext? context = null,
         SafetyLevel safety = SafetyLevel.Normal,
-        IReadOnlyList<CompanionConversationTurn>? recentTurns = null)
+        IReadOnlyList<CompanionConversationTurn>? recentTurns = null,
+        CompanionThreadState? threadState = null)
     {
         if (safety is SafetyLevel.PotentialCrisis or SafetyLevel.ImmediateDanger)
             return UserIntent.SafetySensitive;
@@ -69,11 +70,15 @@ public class IntentRouterService
         // Short answers such as "work", "sleep", or "both" should continue a
         // wellbeing thread rather than restart the conversation as Unknown.
         if (ConversationLanguageService.IsShortCauseAnswer(t)
-            && ConversationLanguageService.PreviousThreadIsWellbeing(recentTurns))
+            && (ConversationLanguageService.PreviousThreadIsWellbeing(recentTurns)
+                || threadState?.Topic is "fatigue" or "stress" or "loneliness" or "work" or "study" or "relationship"))
             return UserIntent.EmotionalDisclosure;
 
         // A short phrase following an emotional disclosure is usually a continuation.
-        if (wordCount <= 8 && ConversationLanguageService.PreviousThreadIsWellbeing(recentTurns))
+        if (wordCount <= 8 &&
+            (ConversationLanguageService.PreviousThreadIsWellbeing(recentTurns)
+             || threadState?.LastIntent == UserIntent.EmotionalDisclosure
+             || !string.IsNullOrWhiteSpace(threadState?.PendingFollowUp)))
             return UserIntent.EmotionalDisclosure;
 
         if (context?.History.Count > 0)

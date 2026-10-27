@@ -42,6 +42,9 @@ public class CompanionContext
     public IReadOnlyList<CompanionConversationTurn> RecentTurns { get; set; }
         = Array.Empty<CompanionConversationTurn>();
 
+    /// <summary>Short-lived structured thread state. Never long-term memory.</summary>
+    public CompanionThreadState ThreadState { get; set; } = new();
+
     /// <summary>Consent-approved relevant memory summary (null if memory consent is off).</summary>
     public string? RelevantMemory { get; set; }
 
@@ -60,6 +63,27 @@ public sealed class CompanionConversationTurn
     public string Role { get; set; } = "user";
     public string Text { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class CompanionThreadState
+{
+    public string? Topic { get; set; }
+    public string? PendingFollowUp { get; set; }
+    public UserIntent LastIntent { get; set; } = UserIntent.Unknown;
+    public CompanionInteractionMode LastMode { get; set; } = CompanionInteractionMode.Talk;
+    public int TurnCount { get; set; }
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class CompanionResponseMetadata
+{
+    public string ResponseId { get; set; } = string.Empty;
+    public string ProviderId { get; set; } = string.Empty;
+    public UserIntent Intent { get; set; } = UserIntent.Unknown;
+    public CompanionInteractionMode Mode { get; set; } = CompanionInteractionMode.Talk;
+    public string Locale { get; set; } = "en";
+    public double QualityScore { get; set; }
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
 
 public class CompanionReply

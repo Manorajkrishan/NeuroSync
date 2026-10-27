@@ -39,18 +39,19 @@
         <li><strong>Consent and preferences.</strong> The switches you set. Defaults are off for memory, emotion history, face analysis, IoT actions, and learning-data sharing.</li>
         <li><strong>Session context.</strong> The current conversation in this browser tab, tied to your account and a session id. It lives in a short-term cache for about 45 minutes and is not your long-term memory.</li>
         <li><strong>Long-term memory, history, and baseline.</strong> Written only after you enable the matching consent. Deleting the account removes them.</li>
+        <li><strong>Response feedback.</strong> If you press Helpful or Not helpful, NeuroSync stores the response id, your rating, provider/intent/mode/locale metadata, and an automated quality score. The feedback record does not store the raw user message or assistant reply. It is marked eligible for learning only when Learning data sharing is enabled.</li>
         <li><strong>Audit events.</strong> Sign-in, export, consent changes, and deletion. These records do not include your messages, password, or tokens.</li>
       </ul>
     </section>
 
     <section>
       <h2>How long it stays</h2>
-      <p>Session context expires after about 45 minutes without needing a request from you. Stored conversation history and memory are removed after the deployment retention window (365 days unless the operator sets a different window) and immediately when you delete your account or your history.</p>
+      <p>Session context expires after about 45 minutes without needing a request from you. Stored conversation history, memory, and explicit response feedback are removed after the deployment retention window (365 days unless the operator sets a different window) and when you delete the related history or your account.</p>
     </section>
 
     <section>
       <h2>Export and deletion</h2>
-      <p>While signed in you can export a JSON copy of the account data NeuroSync holds, delete conversation history and keep the account, or delete the account. Account deletion removes the sign-in, consent, preferences, memory, history, and baseline.</p>
+      <p>While signed in you can export a JSON copy of the account data NeuroSync holds, including explicit response feedback, delete conversation history and keep the account, or delete the account. Account deletion removes the sign-in, consent, preferences, memory, history, feedback, and baseline.</p>
     </section>
 
     <section>

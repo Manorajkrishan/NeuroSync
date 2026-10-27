@@ -180,7 +180,7 @@ public class P4FeedbackEndpointTests : IClassFixture<WebApplicationFactory<Progr
         });
         var feedbackBody = await feedback.Content.ReadAsStringAsync();
         feedback.StatusCode.Should().Be(HttpStatusCode.OK, feedbackBody);
-        feedbackBody.Should().Contain(""shareForLearning":false");
+        feedbackBody.Should().Contain("\\\"shareForLearning\\\":false");
 
         using (var scope = _factory.Services.CreateScope())
         {
@@ -213,7 +213,7 @@ public class P4FeedbackEndpointTests : IClassFixture<WebApplicationFactory<Progr
         });
         var updatedBody = await updated.Content.ReadAsStringAsync();
         updated.StatusCode.Should().Be(HttpStatusCode.OK, updatedBody);
-        updatedBody.Should().Contain(""shareForLearning":true");
+        updatedBody.Should().Contain("\\\"shareForLearning\\\":true");
 
         using var verifyScope = _factory.Services.CreateScope();
         var verifyDb = verifyScope.ServiceProvider.GetRequiredService<NeuroSyncDbContext>();

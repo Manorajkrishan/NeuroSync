@@ -1,3 +1,4 @@
+using NeuroSync.Api.Data;
 using NeuroSync.Core;
 using NeuroSync.IoT;
 
@@ -91,10 +92,27 @@ public class DecisionEngine
         if (_conversationMemory != null && (memoryAllowed || emotionHistoryAllowed))
             context = _conversationMemory.GetOrCreateContext(userId);
 
+        UserPreferenceRecord? preferences = null;
+        if (_accounts != null)
+        {
+            try
+            {
+                preferences = await _accounts.GetPreferencesAsync(userId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Conversation preferences unavailable; using turn defaults");
+            }
+        }
+
+        // Temporary browser-session turns are available even when long-term memory is off.
+        // Feed them into intent routing so short replies keep the previous topic.
+        var recentTurns = BuildRecentTurns(userId, sessionId, context, memoryAllowed);
+
         // SafetyGate is authoritative before companion generation.
         var safety = _safetyGate.Assess(userMessage, context);
 
-        var intent = _intents.Detect(userMessage, context, safety.Level);
+        var intent = _intents.Detect(userMessage, context, safety.Level, recentTurns);
 
         // Model uncertainty must not erase clear semantic wellbeing signals.
         // If the router has no explicit intent but the understanding layer found
@@ -144,14 +162,14 @@ public class DecisionEngine
             ? new Dictionary<string, float>(emotionResult.SignalEstimates)
             : new Dictionary<string, float> { [emotionResult.Emotion.ToString()] = emotionResult.Confidence };
 
-        var recentTurns = BuildRecentTurns(userId, sessionId, context, memoryAllowed);
         var relevantMemory = memoryAllowed ? BuildRelevantMemory(turn, context) : null;
 
         var turnCtx = new CompanionContext
         {
             UserId = userId,
             CurrentMessage = userMessage,
-            DisplayName = turn?.DisplayName,
+            DisplayName = preferences?.DisplayName ?? turn?.DisplayName,
+            Locale = ConversationLanguageService.PreferredLocale(preferences?.Locale, userMessage),
             Intent = intent,
             Mode = mode,
             Emotion = emotionResult,

@@ -181,13 +181,11 @@ public class EmotionUnderstandingService
         if (result.SecondaryEmotion.HasValue)
             Set(result.SecondaryEmotion.Value.ToString(), Math.Max(0.35f, result.Confidence * 0.7f));
 
-        if (ContainsAny(lower, "lonely", "alone", "no one", "nobody", "isolated"))
+        if (ConversationLanguageService.HasLonelinessCue(lower) || lower.Contains("isolated"))
             Set("Loneliness", 0.72f);
-        if (ContainsAny(lower, "stress", "stressed", "pressure", "overwhelmed", "overwhelming", "anxious", "anxiety",
-                "worried", "worry", "nervous", "panic", "scared", "afraid"))
+        if (ConversationLanguageService.HasStressCue(lower))
             Set("Stress", 0.65f);
-        if (ContainsAny(lower, "tired", "exhausted", "drained", "fatigue", "fatigued", "no energy", "zero energy",
-                "low energy", "slept", "worn out", "burnt out", "burned out"))
+        if (ConversationLanguageService.HasFatigueCue(lower) || lower.Contains("slept"))
             Set("Fatigue", 0.6f);
         if (ContainsAny(lower, "hopeless", "pointless", "no point", "give up", "worthless"))
             Set("HopelessnessLanguage", 0.45f);
@@ -201,6 +199,7 @@ public class EmotionUnderstandingService
     }
 
     private static bool HasFeelingWords(string lower) =>
+        ConversationLanguageService.HasEmotionalCue(lower) ||
         lower.Contains("feel") || lower.Contains("sad") || lower.Contains("happy") ||
         lower.Contains("anxious") || lower.Contains("angry") || lower.Contains("worried") ||
         lower.Contains("stressed") || lower.Contains("lonely") || lower.Contains("scared") ||
@@ -214,11 +213,11 @@ public class EmotionUnderstandingService
             (new[] { "feel sad", "feeling sad", "i'm sad", "i am sad", "so sad", "really sad", "depressed", "down today", "feeling down", "not okay", "not ok", "not good" }, EmotionType.Sad),
             (new[] { "feel happy", "feeling happy", "i'm happy", "i am happy", "so happy", "really happy", "feeling great", "feeling good" }, EmotionType.Happy),
             (new[] { "feel angry", "feeling angry", "i'm angry", "i am angry", "so angry", "furious", "pissed", "mad at" }, EmotionType.Angry),
-            (new[] { "feel anxious", "feeling anxious", "i'm anxious", "worried", "nervous", "panic", "overthinking", "stressed out", "feel stressed", "anxiety" }, EmotionType.Anxious),
+            (new[] { "feel anxious", "feeling anxious", "i'm anxious", "worried", "nervous", "panic", "overthinking", "stressed out", "feel stressed", "anxiety", "tension ah", "stress ah", "bayama irukku", "bayama iruku" }, EmotionType.Anxious),
             (new[] { "feel calm", "feeling calm", "i'm calm", "peaceful", "relaxed", "at peace" }, EmotionType.Calm),
             (new[] { "feel excited", "feeling excited", "i'm excited", "so excited", "pumped", "thrilled" }, EmotionType.Excited),
             (new[] { "feel frustrated", "feeling frustrated", "i'm frustrated", "so frustrated", "fed up", "this is annoying" }, EmotionType.Frustrated),
-            (new[] { "feel lonely", "feeling lonely", "i'm lonely", "i am lonely", "so alone", "nobody cares" }, EmotionType.Sad),
+            (new[] { "feel lonely", "feeling lonely", "i'm lonely", "i am lonely", "so alone", "nobody cares", "thaniya iruken", "thaniya irukken", "yarum illa", "yaarum illa", "manasu seri illa", "manasu sari illa" }, EmotionType.Sad),
             (new[] { "miss my", "i miss ", "missing my" }, EmotionType.Sad),
         };
 
@@ -235,10 +234,12 @@ public class EmotionUnderstandingService
         var scores = new Dictionary<EmotionType, int>();
         void Add(EmotionType e, int w) => scores[e] = scores.GetValueOrDefault(e) + w;
 
-        if (ContainsAny(lower, "sad", "cry", "tears", "heartbroken", "lonely", "empty", "hopeless", "worthless")) Add(EmotionType.Sad, 2);
+        if (ContainsAny(lower, "sad", "cry", "tears", "heartbroken", "lonely", "empty", "hopeless", "worthless",
+                "manasu seri illa", "manasu sari illa", "thaniya iruken", "thaniya irukken")) Add(EmotionType.Sad, 2);
         if (ContainsAny(lower, "happy", "glad", "joy", "smile", "grateful", "blessed", "awesome")) Add(EmotionType.Happy, 2);
         if (ContainsAny(lower, "angry", "rage", "hate", "furious", "annoyed", "irritated")) Add(EmotionType.Angry, 2);
-        if (ContainsAny(lower, "anxious", "worry", "worried", "nervous", "panic", "stress", "scared", "afraid", "overwhelmed")) Add(EmotionType.Anxious, 2);
+        if (ContainsAny(lower, "anxious", "worry", "worried", "nervous", "panic", "stress", "scared", "afraid", "overwhelmed",
+                "tension ah", "stress ah", "bayama", "romba tension")) Add(EmotionType.Anxious, 2);
         if (ContainsAny(lower, "calm", "peace", "relaxed", "chill", "serene")) Add(EmotionType.Calm, 1);
         if (ContainsAny(lower, "excited", "thrilled", "hyped", "can't wait", "amazing news")) Add(EmotionType.Excited, 2);
         if (ContainsAny(lower, "frustrated", "stuck", "blocked", "why won't", "keeps failing", "fed up")) Add(EmotionType.Frustrated, 2);
@@ -271,15 +272,15 @@ public class EmotionUnderstandingService
 
     private static string? DetectLikelyCause(string lower)
     {
-        if (ContainsAny(lower, "exam", "test", "grade", "study", "university", "college", "assignment"))
+        if (ContainsAny(lower, "exam", "test", "grade", "study", "university", "college", "assignment", "padippu"))
             return "school / exams";
-        if (ContainsAny(lower, "work", "boss", "job", "colleague", "office", "deadline"))
+        if (ContainsAny(lower, "work", "boss", "job", "colleague", "office", "deadline", "velai"))
             return "work";
         if (ContainsAny(lower, "family", "mom", "dad", "parents", "brother", "sister"))
             return "family";
         if (ContainsAny(lower, "friend", "relationship", "girlfriend", "boyfriend", "breakup", "broke up", "partner"))
             return "relationships";
-        if (ContainsAny(lower, "alone", "lonely", "no one", "nobody"))
+        if (ContainsAny(lower, "alone", "lonely", "no one", "nobody", "thaniya", "yarum illa", "yaarum illa"))
             return "loneliness";
         if (ContainsAny(lower, "money", "bills", "broke", "debt", "rent"))
             return "money stress";

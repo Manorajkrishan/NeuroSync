@@ -21,6 +21,10 @@ public class CompanionContext
     }
 
     public string? DisplayName { get; set; }
+
+    /// <summary>Preferred conversation locale (for example en, ta, tanglish).</summary>
+    public string Locale { get; set; } = "en";
+
     public UserIntent Intent { get; set; } = UserIntent.Unknown;
     public CompanionInteractionMode Mode { get; set; } = CompanionInteractionMode.Talk;
     public EmotionResult? Emotion { get; set; }

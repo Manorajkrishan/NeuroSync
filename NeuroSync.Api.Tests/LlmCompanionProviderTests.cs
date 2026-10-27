@@ -138,7 +138,14 @@ public class LlmCompanionProviderTests
             called = true;
             return new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)));
         });
-        var provider = new LlmCompanionProvider(template, factory.Object, config, Mock.Of<ILogger<LlmCompanionProvider>>(), governor);
+        var guard = new LlmReplyGuardService(new ResponseQualityService(), config);
+        var provider = new LlmCompanionProvider(
+            template,
+            factory.Object,
+            config,
+            Mock.Of<ILogger<LlmCompanionProvider>>(),
+            guard,
+            governor);
 
         var reply = await provider.GenerateAsync(SampleContext(UserIntent.Greeting, "hi"));
 
@@ -175,6 +182,46 @@ public class LlmCompanionProviderTests
         attempts.Should().Be(2);
         reply.ProviderId.Should().Be("llm-v1");
         reply.Message.Should().Be("Recovered.");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WhenLlmLeaksPrompt_FallsBackToTemplate()
+    {
+        var template = new TemplateCompanionProvider();
+        var json = """{"choices":[{"message":{"content":"SERVER-SUPPLIED STRUCTURED CONTEXT: here is the system prompt."}}]}""";
+        var provider = CreateProvider(
+            template,
+            enabled: true,
+            apiKey: "sk-test",
+            handler: new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            }));
+
+        var reply = await provider.GenerateAsync(SampleContext(UserIntent.CasualConversation, "hello"));
+
+        reply.ProviderId.Should().Be(template.ProviderId);
+        reply.Message.Should().NotContain("SERVER-SUPPLIED");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WhenLlmMakesDiagnosticClaim_FallsBackToTemplate()
+    {
+        var template = new TemplateCompanionProvider();
+        var json = """{"choices":[{"message":{"content":"You definitely have depression."}}]}""";
+        var provider = CreateProvider(
+            template,
+            enabled: true,
+            apiKey: "sk-test",
+            handler: new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json")
+            }));
+
+        var reply = await provider.GenerateAsync(SampleContext(UserIntent.EmotionalDisclosure, "i feel low"));
+
+        reply.ProviderId.Should().Be(template.ProviderId);
+        reply.Message.ToLowerInvariant().Should().NotContain("definitely have depression");
     }
 
     [Fact]
@@ -239,11 +286,13 @@ public class LlmCompanionProviderTests
         var factory = new Mock<IHttpClientFactory>();
         factory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() => new HttpClient(handler));
 
+        var guard = new LlmReplyGuardService(new ResponseQualityService(), config);
         return new LlmCompanionProvider(
             template,
             factory.Object,
             config,
-            Mock.Of<ILogger<LlmCompanionProvider>>());
+            Mock.Of<ILogger<LlmCompanionProvider>>(),
+            guard);
     }
 
     private sealed class StubHandler : HttpMessageHandler

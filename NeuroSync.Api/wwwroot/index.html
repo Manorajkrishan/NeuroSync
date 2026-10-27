@@ -55,6 +55,10 @@
     .bubble { max-width: 85%; padding: 10px 12px; border-radius: 14px; line-height: 1.45; white-space: pre-wrap; }
     .user { align-self: flex-end; background: #2a4a3d; }
     .ai { align-self: flex-start; background: rgba(255,255,255,.06); border: 1px solid var(--line); }
+    .feedback { align-self: flex-start; display: flex; align-items: center; gap: 6px; margin: -5px 0 2px 4px; min-height: 28px; }
+    .feedback button { padding: 4px 8px; border-radius: 8px; font-size: .78rem; background: transparent; color: var(--muted); border: 1px solid var(--line); }
+    .feedback button.selected { color: var(--ink); border-color: rgba(61,155,122,.7); background: rgba(61,155,122,.12); }
+    .feedback span { color: var(--muted); font-size: .72rem; }
     .composer { display: flex; gap: 8px; margin-top: 10px; }
     .composer textarea, input[type="email"], input[type="password"], input[type="text"], select {
       width: 100%; border-radius: 12px; border: 1px solid var(--line);
@@ -271,6 +275,66 @@
       d.textContent = text;
       chat.appendChild(d);
       chat.scrollTop = chat.scrollHeight;
+      return d;
+    }
+
+    function addFeedbackControls(data) {
+      if (!accessToken || !data.responseId || !data.sessionId) return;
+
+      const row = document.createElement('div');
+      row.className = 'feedback';
+
+      const up = document.createElement('button');
+      up.type = 'button';
+      up.textContent = '👍 Helpful';
+      up.setAttribute('aria-label', 'Mark this response helpful');
+
+      const down = document.createElement('button');
+      down.type = 'button';
+      down.textContent = '👎 Not helpful';
+      down.setAttribute('aria-label', 'Mark this response not helpful');
+
+      const status = document.createElement('span');
+      row.append(up, down, status);
+      chat.appendChild(row);
+      chat.scrollTop = chat.scrollHeight;
+
+      const submit = async (rating, button) => {
+        up.disabled = true;
+        down.disabled = true;
+        status.textContent = 'Saving…';
+        try {
+          const res = await protectedFetch('/api/companion/feedback', {
+            method: 'POST',
+            headers: headers(true),
+            body: JSON.stringify({
+              userId: currentUserId(),
+              sessionId: data.sessionId,
+              responseId: data.responseId,
+              rating
+            })
+          });
+          const result = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            status.textContent = result.error || 'Feedback could not be saved.';
+            up.disabled = false;
+            down.disabled = false;
+            return;
+          }
+          up.classList.toggle('selected', rating === 1);
+          down.classList.toggle('selected', rating === -1);
+          status.textContent = result.shareForLearning ? 'Thanks — learning consent on.' : 'Thanks — saved privately.';
+          up.disabled = false;
+          down.disabled = false;
+        } catch (_) {
+          status.textContent = 'Feedback could not be saved.';
+          up.disabled = false;
+          down.disabled = false;
+        }
+      };
+
+      up.onclick = () => submit(1, up);
+      down.onclick = () => submit(-1, down);
     }
 
     function updateDevInsights(data) {
@@ -279,7 +343,9 @@
       if (insightsEl) {
         insightsEl.textContent =
           'Intent ' + (d.intent || '-') + ' | Mode ' + (data.mode || d.mode || '-') +
-          ' | Safety ' + (d.safety || '-') + ' | Signal ' + (d.primarySignal || '-');
+          ' | Safety ' + (d.safety || '-') + ' | Signal ' + (d.primarySignal || '-') +
+          ' | Quality ' + (d.responseQuality != null ? Number(d.responseQuality).toFixed(2) : '-') +
+          ' | Topic ' + (d.threadTopic || '-');
       }
       modeChip.textContent = data.mode || d.mode || '-';
       uncChip.textContent = data.uncertainty || d.uncertainty || '-';
@@ -572,6 +638,7 @@
         }
         if (data.sessionId) saveCompanionSessionId(data.sessionId);
         add('ai', data.message || '...');
+        addFeedbackControls(data);
         updateDevInsights(data);
         if (data.actionOffer) {
           actionOffer.style.display = 'block';

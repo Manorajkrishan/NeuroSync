@@ -33,7 +33,8 @@ public sealed class LlmReplyGuardService
             0.95);
 
         var hardBlock = quality.Flags.Any(x =>
-            x is "prompt_leak" or "diagnostic_claim" or "confidence_leak" or "safety_provider_mismatch");
+            x is "prompt_leak" or "diagnostic_claim" or "confidence_leak"
+                or "safety_provider_mismatch" or "robotic_uncertainty");
 
         return !hardBlock && quality.IsAcceptable(threshold);
     }
